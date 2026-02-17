@@ -42,3 +42,9 @@ src-tauri/target/
 # Local agent metadata
 .agent/skills
 
+# Local AI assistant docs/config
+AGENTS.md
+CLAUDE.md
+.claude/
+.agent/
+

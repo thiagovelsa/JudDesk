@@ -1,6 +1,6 @@
-# JurisDesk
+﻿# JurisDesk
 
-Sistema desktop para escritÃ³rio de advocacia com banco de dados local, gestÃ£o de clientes/documentos, controle de prazos e assistente IA.
+Sistema desktop para escritÃƒÂ³rio de advocacia com banco de dados local, gestÃƒÂ£o de clientes/documentos, controle de prazos e assistente IA.
 
 ![Tauri](https://img.shields.io/badge/Tauri-2.0-blue?logo=tauri)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
@@ -196,54 +196,54 @@ Nota (Windows): o script `npm run tauri dev` usa `scripts/tauri-with-rust-env.cj
 
 ```
 src/
-â”œâ”€â”€ components/          # Componentes React
-â”‚   â”œâ”€â”€ layout/         # Sidebar, Header, MainLayout, SearchBar
-â”‚   â”œâ”€â”€ assistant/      # ThinkingBlock, WebSearchResults, MessageCost
-â”‚   â”œâ”€â”€ cases/          # CaseForm
-â”‚   â”œâ”€â”€ clients/        # ClientForm
-â”‚   â”œâ”€â”€ dashboard/      # DashboardSkeleton
-â”‚   â”œâ”€â”€ deadlines/      # CalendarGrid, CalendarDay, CalendarDeadline, DeadlineForm
-â”‚   â”œâ”€â”€ documents/      # FolderTree, PDFViewer
-â”‚   â”œâ”€â”€ settings/       # BackupSettings
-â”‚   â””â”€â”€ ui/             # Button, Input, Modal, Card, Badge...
-â”œâ”€â”€ lib/                # Utilitarios
-â”‚   â”œâ”€â”€ db.ts          # Wrapper SQLite + backup/restore
-â”‚   â”œâ”€â”€ ai.ts          # Integracao Claude/OpenAI/Ollama/Gemini
-â”‚   â”œâ”€â”€ pdf.ts         # Extracao de texto PDF
-â”‚   â”œâ”€â”€ extractors.ts  # Extracao multi-formato (PDF/CSV/Excel/Word/TXT)
-â”‚   â”œâ”€â”€ globalSearch.ts # Busca unificada
-â”‚   â”œâ”€â”€ activityLogger.ts # Log de atividades
-â”‚   â”œâ”€â”€ autoBackup.ts  # Sistema de backup automatico
-â”‚   â”œâ”€â”€ attachmentCleanup.ts # Limpeza de anexos orfaos
-â”‚   â”œâ”€â”€ documentStorage.ts # Armazenamento local de documentos
-â”‚   â””â”€â”€ notifications.ts # Notificacoes nativas
-â”œâ”€â”€ stores/            # Estado global (Zustand)
-â”‚   â”œâ”€â”€ clientStore.ts
-â”‚   â”œâ”€â”€ caseStore.ts
-â”‚   â”œâ”€â”€ documentStore.ts
-â”‚   â”œâ”€â”€ deadlineStore.ts
-â”‚   â”œâ”€â”€ folderStore.ts
-â”‚   â”œâ”€â”€ searchStore.ts
-â”‚   â”œâ”€â”€ chatStore.ts
-â”‚   â””â”€â”€ settingsStore.ts
-â”œâ”€â”€ pages/             # Paginas
-â”‚   â”œâ”€â”€ Dashboard.tsx
-â”‚   â”œâ”€â”€ Clients.tsx
-â”‚   â”œâ”€â”€ Documents.tsx
-â”‚   â”œâ”€â”€ Calendar.tsx
-â”‚   â”œâ”€â”€ Assistant.tsx
-â”‚   â”œâ”€â”€ ActivityHistory.tsx
-â”‚   â””â”€â”€ Settings.tsx
-â”œâ”€â”€ test/              # Setup e cenarios de teste
-â””â”€â”€ types/             # Tipos TypeScript
+|-- components/               # Componentes React
+|   |-- layout/               # Sidebar, Header, MainLayout, SearchBar
+|   |-- assistant/            # ThinkingBlock, WebSearchResults, MessageCost
+|   |-- cases/                # CaseForm
+|   |-- clients/              # ClientForm
+|   |-- dashboard/            # DashboardSkeleton
+|   |-- deadlines/            # CalendarGrid, CalendarDay, CalendarDeadline, DeadlineForm
+|   |-- documents/            # FolderTree, PDFViewer
+|   |-- settings/             # BackupSettings
+|   `-- ui/                   # Button, Input, Modal, Card, Badge...
+|-- lib/                      # Utilitarios
+|   |-- db.ts                 # Wrapper SQLite + backup/restore
+|   |-- ai.ts                 # Integracao Claude/OpenAI/Ollama/Gemini
+|   |-- pdf.ts                # Extracao de texto PDF
+|   |-- extractors.ts         # Extracao multi-formato (PDF/CSV/Excel/Word/TXT)
+|   |-- globalSearch.ts       # Busca unificada
+|   |-- activityLogger.ts     # Log de atividades
+|   |-- autoBackup.ts         # Sistema de backup automatico
+|   |-- attachmentCleanup.ts  # Limpeza de anexos orfaos
+|   |-- documentStorage.ts    # Armazenamento local de documentos
+|   `-- notifications.ts      # Notificacoes nativas
+|-- stores/                   # Estado global (Zustand)
+|   |-- clientStore.ts
+|   |-- caseStore.ts
+|   |-- documentStore.ts
+|   |-- deadlineStore.ts
+|   |-- folderStore.ts
+|   |-- searchStore.ts
+|   |-- chatStore.ts
+|   `-- settingsStore.ts
+|-- pages/                    # Paginas
+|   |-- Dashboard.tsx
+|   |-- Clients.tsx
+|   |-- Documents.tsx
+|   |-- Calendar.tsx
+|   |-- Assistant.tsx
+|   |-- ActivityHistory.tsx
+|   `-- Settings.tsx
+|-- test/                     # Setup e cenarios de teste
+`-- types/                    # Tipos TypeScript
 
 src-tauri/
-â”œâ”€â”€ src/main.rs        # Entry point Rust
-â”œâ”€â”€ src/lib.rs         # Inicializacao de plugins Tauri
-â”œâ”€â”€ Cargo.toml         # Deps Rust
-â”œâ”€â”€ tauri.conf.json    # Config Tauri
-â””â”€â”€ capabilities/      # Permissoes de plugins
-   â””â”€â”€ default.json
+|-- src/main.rs               # Entry point Rust
+|-- src/lib.rs                # Inicializacao de plugins Tauri
+|-- Cargo.toml                # Deps Rust
+|-- tauri.conf.json           # Config Tauri
+`-- capabilities/             # Permissoes de plugins
+    `-- default.json
 ```
 
 ## Documentacao de Referencia
@@ -402,7 +402,7 @@ Nota: `npm test`/`npm run test:*` requer Node.js 20+.
 - **Movimento**: Sistema, Normal ou Reduzido (Settings -> Interface, chave `ui_motion`)
 - **Icones**: Lucide React (preferir stroke consistente)
 - **Dashboard**: sem widget de entrada do Assistente IA (acesso dedicado pela rota `/assistant`)
-- **Componentes**: UI prÃ³pria (Tailwind + componentes em `src/components/ui`)
+- **Componentes**: UI prÃƒÂ³pria (Tailwind + componentes em `src/components/ui`)
 
 ### Troubleshooting
 
@@ -438,3 +438,4 @@ MIT
 3. Commit suas mudancas (`git commit -m 'Adiciona nova funcionalidade'`)
 4. Push para a branch (`git push origin feature/nova-funcionalidade`)
 5. Abra um Pull Request
+

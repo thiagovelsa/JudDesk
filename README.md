@@ -1,6 +1,6 @@
 ﻿# JurisDesk
 
-Sistema desktop para escritÃƒÂ³rio de advocacia com banco de dados local, gestÃƒÂ£o de clientes/documentos, controle de prazos e assistente IA.
+Sistema desktop para escritorio de advocacia com banco de dados local, gestao de clientes/documentos, controle de prazos e assistente IA.
 
 ![Tauri](https://img.shields.io/badge/Tauri-2.0-blue?logo=tauri)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
@@ -402,7 +402,7 @@ Nota: `npm test`/`npm run test:*` requer Node.js 20+.
 - **Movimento**: Sistema, Normal ou Reduzido (Settings -> Interface, chave `ui_motion`)
 - **Icones**: Lucide React (preferir stroke consistente)
 - **Dashboard**: sem widget de entrada do Assistente IA (acesso dedicado pela rota `/assistant`)
-- **Componentes**: UI prÃƒÂ³pria (Tailwind + componentes em `src/components/ui`)
+- **Componentes**: UI propria (Tailwind + componentes em `src/components/ui`)
 
 ### Troubleshooting
 
@@ -438,4 +438,5 @@ MIT
 3. Commit suas mudancas (`git commit -m 'Adiciona nova funcionalidade'`)
 4. Push para a branch (`git push origin feature/nova-funcionalidade`)
 5. Abra um Pull Request
+
 

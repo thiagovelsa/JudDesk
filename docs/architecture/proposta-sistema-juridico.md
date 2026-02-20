@@ -252,6 +252,31 @@ CREATE TABLE ai_usage_logs (
 
 ---
 
+## Seguranca de Dados (fevereiro/2026)
+
+### Segredos de IA
+- Chaves `claude_api_key`, `openai_api_key` e `gemini_api_key` sao persistidas no keychain do sistema operacional (bridge Tauri + crate `keyring`).
+- A tabela `settings` nao guarda mais segredo em texto puro (valor persistido como `null` para chaves sensiveis).
+- Existe migracao automatica de chaves legadas em plaintext para keychain durante `fetchSettings()`.
+- `exportDatabase()` exclui chaves sensiveis e `importDatabase()` ignora qualquer tentativa de reintroduzi-las.
+
+### Integridade de arquivos locais
+- `documents.file_path` e `chat_attachments.file_path` importados de backup passam por sanitizacao de escopo:
+  - Documentos: somente paths dentro de `$APPDATA/documents`.
+  - Anexos: somente paths dentro de `$APPDATA/chat_attachments`.
+- Exclusoes em runtime validam o root gerenciado antes de remover arquivos no filesystem.
+- Caminho configurado para auto backup e nome de arquivo de restore sao validados contra path traversal.
+- Capability de filesystem no Tauri foi reduzida para escopo `$APPDATA` apenas.
+
+### Backup e restore
+- Auto backup usa envelope criptografado (`jurisdesk-backup-encrypted` v2):
+  - KDF: PBKDF2 SHA-256 (`250_000` iteracoes)
+  - Cifra: AES-GCM 256
+- Restore mantem compatibilidade com backups legados JSON sem criptografia.
+- `importDatabase()` reconstrui `documents_fts` ao final para evitar inconsistencias de busca apos restore/import completo.
+
+---
+
 ## Funcionalidades Principais
 
 ### 1. GestÃ£o de Clientes
@@ -428,9 +453,9 @@ interface OllamaModel {
 }
 
 // Detectar modelos Ollama instalados
-async function getOllamaModels(): Promise<OllamaModel[]> {
+async function getOllamaModels(baseUrl: string = 'http://localhost:11434'): Promise<OllamaModel[]> {
   try {
-    const response = await fetch('http://localhost:11434/api/tags');
+    const response = await fetch(`${baseUrl}/api/tags`);
     const data = await response.json();
     return data.models || [];
   } catch {
@@ -439,9 +464,9 @@ async function getOllamaModels(): Promise<OllamaModel[]> {
 }
 
 // Verificar se Ollama estÃ¡ disponÃ­vel
-async function isOllamaRunning(): Promise<boolean> {
+async function isOllamaRunning(baseUrl: string = 'http://localhost:11434'): Promise<boolean> {
   try {
-    const response = await fetch('http://localhost:11434/api/tags');
+    const response = await fetch(`${baseUrl}/api/tags`);
     return response.ok;
   } catch {
     return false;
@@ -453,6 +478,7 @@ async function isOllamaRunning(): Promise<boolean> {
 // Claude: claude-sonnet-4-5-20250929
 // OpenAI: gpt-5-mini
 // Gemini: models/gemini-3-pro-preview, models/gemini-3-flash-preview
+// Gemini testAPIConnection: chave enviada por header x-goog-api-key
 
 // System prompt base para contexto jurÃ­dico
 const SYSTEM_PROMPT = `VocÃª Ã© um assistente jurÃ­dico especializado no direito brasileiro.
@@ -590,8 +616,14 @@ npm run tauri build
 9. [x] Virtualizacao da lista de mensagens do assistente + janela de memoria (100)
 10. [x] Coordenador de limpeza em cascata (delecao de cliente/caso entre stores)
 11. [x] Rollback de upload no cadastro de cliente para evitar arquivos orfaos
-12. [ ] Evoluir cobertura de testes E2E e consolidar checklist de release
-13. [ ] Refinamentos continuos de UX e roadmap v2
+12. [x] API keys migradas para keychain do SO (sem segredo em plaintext no SQLite)
+13. [x] Backup automatico criptografado com senha + compatibilidade legado
+14. [x] Sanitizacao de `file_path` importado e validacao de delecao por root gerenciado
+15. [x] Rebuild de `documents_fts` apos import completo
+16. [x] Persistencia de custo/uso para Claude, GPT-5 e Gemini em `ai_usage_logs`
+17. [x] Build Tauri endurecido: sem feature `devtools` na dependencia e escopo FS AppData-only
+18. [ ] Evoluir cobertura de testes E2E e consolidar checklist de release
+19. [ ] Refinamentos continuos de UX e roadmap v2
 
 ---
 

@@ -23,3 +23,16 @@
 ## Notes
 - Backup encryption runs in production paths. Test environment uses deterministic plaintext fallback only for suite stability.
 - Legacy plaintext backups remain restorable for compatibility.
+
+---
+
+# Documentation Sync (2026-02-20)
+
+## Plan
+- [x] Atualizar `README.md` para refletir hardening completo (keychain, backup criptografado, path scope e custos).
+- [x] Atualizar `CLAUDE.md` com comportamento real de backup/IA/Tauri permissions e nomenclatura de tabelas.
+- [x] Atualizar `docs/architecture/proposta-sistema-juridico.md` com secoes de seguranca de dados e status da implementacao.
+- [x] Atualizar `docs/README.md` com resumo das mudancas recentes de seguranca.
+
+## Review
+- Revisao por busca textual (`rg`) para remover referencias desatualizadas (ex.: `$DESKTOP/$DOWNLOAD`, `isDailyLimitReached`, `ai_usage_log` singular).

@@ -24,6 +24,10 @@ Principais pontos publicados:
 - Melhorias de busca global (limiar minimo + protecao contra resultados stale).
 - Novos indices SQLite e ajustes de consistencia em datas locais.
 - Deep-link de resultados para abrir entidade diretamente em Clientes/Documentos/Agenda.
+- API keys movidas para keychain do SO (sem persistencia em texto puro no SQLite).
+- Export/import de banco exclui configuracoes sensiveis e sanitiza `file_path` importado.
+- Auto backup criptografado com senha (AES-GCM + PBKDF2), com compatibilidade para restore legado.
+- Escopo de filesystem reduzido para `$APPDATA` nas capabilities do Tauri.
 
 Recomendacao de leitura:
 1. `README.md` para setup e operacao do projeto.

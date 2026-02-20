@@ -103,9 +103,11 @@ Sistema desktop para escritorio de advocacia com banco de dados local, gestao de
 ### Backup Automatico
 - Backup automatico apos operacoes CRUD (debounce 5s)
 - Intervalo minimo entre backups completos (default: 60s) para reduzir I/O em rajadas
-- Pasta de backup configuravel
+- Backups automaticos criptografados com senha (AES-GCM + PBKDF2)
+- Pasta de backup configuravel com validacao de escopo (somente AppData)
 - Rotacao automatica (mantem ultimos N backups)
-- Restauracao com um clique
+- Restauracao com senha e validacao de arquivo
+- Compatibilidade de leitura com backups legados em JSON (sem criptografia)
 - Lista/status de backups sincronizados automaticamente quando o banco recebe alteracoes
 
 ### Estado Reativo (Zustand)
@@ -127,12 +129,17 @@ Revisao de seguranca implementada (fevereiro/2026):
 
 - **CSP restritivo**: Content Security Policy sem 'unsafe-inline' previne injecao de CSS
 - **CSP local para IA**: `connect-src` permite `localhost/127.0.0.1` em portas dinamicas para Ollama configuravel
-- **Path validation**: Caminhos de backup sao validados contra path traversal (apenas AppData/Desktop/Download permitidos)
+- **Segredos no keychain**: API keys de IA ficam no cofre do sistema operacional, nao em texto puro no SQLite
+- **Export/import seguro**: `exportDatabase()` exclui chaves sensiveis e `importDatabase()` ignora essas chaves
+- **Path validation**: Caminhos de backup sao validados contra path traversal (somente AppData permitido)
+- **Escopo de arquivos gerenciados**: delecao de documentos/anexos e paths importados sao aceitos apenas dentro dos roots do app
+- **Backup criptografado**: fluxo de auto backup usa envelope criptografado com senha
 - **Panic handling**: Hook de panic em Rust para logging antes de encerrar
 - **Race condition fix**: Criacao de pastas de cliente com lock atomico
 - **JSON validation**: Parse de web search results com validacao de schema
 - **Desacoplamento**: Callback pattern entre stores para evitar dependencias circulares
-- **Least privilege no Tauri**: plugin/permissao `shell` removidos por nao serem necessarios
+- **Least privilege no Tauri**: plugin/permissao `shell` removidos; escopo FS reduzido para AppData
+- **Hardening de build**: dependencia `tauri` sem feature `devtools` em release
 
 ### Acessibilidade
 
@@ -160,7 +167,7 @@ Revisao de seguranca implementada (fevereiro/2026):
 
 ## Atualizacoes Recentes
 
-### 20/02/2026 - Hardening tecnico, desempenho e alinhamento FE/BE
+### 20/02/2026 - Hardening tecnico, seguranca de dados e consistencia
 
 - **Ollama configuravel ponta a ponta**: URL salva em `settings.ollama_url` passou a ser usada na verificacao de conexao, listagem de modelos e envio de mensagens.
 - **Seguranca Tauri**: remocao do plugin `tauri-plugin-shell` e da permissao `shell:allow-open`.
@@ -169,6 +176,14 @@ Revisao de seguranca implementada (fevereiro/2026):
 - **Busca global mais estavel**: limite minimo de consulta e protecao contra resultados fora de ordem durante digitacao rapida.
 - **Persistencia/indices**: limpeza de FTS ao deletar documento e novos indices para consultas frequentes.
 - **Navegacao por resultados**: paginas de Clientes/Documentos/Agenda consomem query params para abrir item diretamente.
+- **API keys no keychain**: segredos migrados para armazenamento seguro do SO; DB deixa de manter valores sensiveis em texto puro.
+- **Backup mais seguro**: auto backup criptografado com senha; restore mantem compatibilidade com backup legado.
+- **Import/export blindado**: configuracoes sensiveis nao entram no backup e paths de arquivos importados sao sanitizados.
+- **Consistencia transacional**: salvamento em lote de configuracoes via `SAVEPOINT` para evitar estado parcial.
+- **Assistente mais resiliente**: delecao de sessao primeiro no DB e limpeza de anexos depois.
+- **Custos completos**: uso/custo de GPT-5 e Gemini agora persiste em `ai_usage_logs`.
+- **Gemini teste de conexao**: chave enviada por header `x-goog-api-key` (nao por query string).
+- **UX alinhada ao comportamento real**: removido "limite diario" que nao era enforcement no envio.
 
 ## Stack Tecnologica
 
@@ -288,7 +303,9 @@ SQLite local com as seguintes tabelas:
 | `deadlines` | Prazos e lembretes |
 | `chat_sessions` | Sessoes do assistente IA |
 | `chat_messages` | Mensagens do chat |
+| `chat_attachments` | Anexos do chat |
 | `settings` | Configuracoes do sistema |
+| `ai_usage_logs` | Consumo e custo por mensagem de IA |
 | `activity_logs` | Historico de atividades |
 
 Observacao: `documents.file_path` guarda o caminho local do arquivo em appData.
@@ -297,14 +314,19 @@ Observacao: `documents.file_path` guarda o caminho local do arquivo em appData.
 
 ```typescript
 import { exportDatabase, importDatabase } from '@/lib/db'
+import { executeBackup, restoreFromBackup } from '@/lib/autoBackup'
 
-// Exportar backup JSON
+// Exportar backup JSON (portabilidade; chaves sensiveis sao excluidas)
 const backup = await exportDatabase()
 const json = JSON.stringify(backup, null, 2)
 
-// Importar backup
+// Importar backup JSON (paths sensiveis sao sanitizados)
 const backup = JSON.parse(jsonString)
 await importDatabase(backup)
+
+// Auto backup criptografado com senha
+await executeBackup('senha-forte')
+await restoreFromBackup('jurisdesk_auto_2026-02-20T10-00-00-000Z.json', 'senha-forte')
 ```
 
 ### Diagnostico em Tempo Real (Configuracoes > Banco de Dados)
@@ -357,7 +379,7 @@ Acessiveis em **Settings** (icone de engrenagem):
 |-------|---------------|
 | Perfil do Advogado | Nome completo, Registro OAB |
 | Interface | Densidade (Normal/Compacto), Movimento (Sistema/Normal/Reduzido) |
-| Inteligencia Artificial | API keys (Claude, OpenAI, Gemini), URL Ollama, Provider/Modelo padrao, Thinking/Reasoning, Web Search |
+| Inteligencia Artificial | API keys (Claude/OpenAI/Gemini via keychain), URL Ollama, Provider/Modelo padrao, Thinking/Reasoning, Web Search |
 | Notificacoes | Ativar/desativar, Prazos vencidos, Prazos proximos, Antecedencia |
 | Banco de Dados | Backup manual, Importar backup, Exportar CSV, Backup automatico |
 
@@ -368,9 +390,9 @@ lawyer_name          # Nome do advogado
 lawyer_oab           # Registro OAB
 ui_density           # Densidade da UI: normal | compact
 ui_motion            # Movimento da UI: system | normal | reduced
-claude_api_key       # API key Anthropic
-openai_api_key       # API key OpenAI
-gemini_api_key       # API key Google Gemini
+claude_api_key       # Alias da chave Anthropic (valor efetivo no keychain)
+openai_api_key       # Alias da chave OpenAI (valor efetivo no keychain)
+gemini_api_key       # Alias da chave Gemini (valor efetivo no keychain)
 ollama_url           # URL do Ollama (default: http://localhost:11434)
 default_provider     # Provider padrao: ollama | claude | openai | gemini
 assistant_last_session_id # Ultima sessao aberta no Assistente (persistencia Tauri)
@@ -388,8 +410,11 @@ reminder_days        # Dias de antecedencia
 auto_backup_enabled  # Backup automatico ativo
 auto_backup_path     # Pasta de backups
 auto_backup_max_count # Maximo de backups mantidos
+auto_backup_debounce # Debounce entre mutacao e backup (default: 5000)
 auto_backup_min_interval_ms # Intervalo minimo entre backups completos (default: 60000)
 ```
+
+Observacao: para `claude_api_key`, `openai_api_key` e `gemini_api_key`, o valor efetivo fica no keychain do SO; no SQLite esses campos sao mantidos como `null`.
 
 ## Testes
 

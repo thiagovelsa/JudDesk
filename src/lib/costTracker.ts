@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sistema de Tracking de Custos para Claude API
  *
  * Calcula custos baseado no uso de tokens e registra no banco de dados.
@@ -217,6 +217,46 @@ export async function logUsage(sessionId: number, usage: APIUsage): Promise<numb
   return id
 }
 
+export async function logGPT5Usage(sessionId: number, usage: GPT5Usage): Promise<number> {
+  const cost = calculateCostGPT5(usage)
+
+  return executeInsert(
+    `INSERT INTO ai_usage_logs (
+      session_id, input_tokens, output_tokens, thinking_tokens,
+      cache_read_tokens, cache_write_tokens, cost_usd
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      sessionId,
+      usage.input_tokens,
+      usage.output_tokens,
+      usage.reasoning_tokens || 0,
+      usage.cached_tokens || 0,
+      0,
+      cost
+    ]
+  )
+}
+
+export async function logGeminiUsage(sessionId: number, usage: GeminiUsage): Promise<number> {
+  const cost = calculateCostGemini(usage)
+
+  return executeInsert(
+    `INSERT INTO ai_usage_logs (
+      session_id, input_tokens, output_tokens, thinking_tokens,
+      cache_read_tokens, cache_write_tokens, cost_usd
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      sessionId,
+      usage.input_tokens,
+      usage.output_tokens,
+      usage.thinking_tokens || 0,
+      usage.cached_tokens || 0,
+      0,
+      cost
+    ]
+  )
+}
+
 /**
  * Obtém custo total do dia atual
  *
@@ -320,30 +360,6 @@ export async function getSessionCost(sessionId: number): Promise<number> {
 }
 
 /**
- * Verifica se o limite diário foi atingido
- *
- * @param limitUsd - Limite em USD
- * @returns true se o limite foi atingido
- */
-export async function isDailyLimitReached(limitUsd: number): Promise<boolean> {
-  if (limitUsd <= 0) return false
-  const dailyCost = await getDailyCost()
-  return dailyCost >= limitUsd
-}
-
-/**
- * Obtém percentual do limite diário usado
- *
- * @param limitUsd - Limite em USD
- * @returns Percentual de 0 a 100 (ou mais se ultrapassou)
- */
-export async function getDailyLimitPercentage(limitUsd: number): Promise<number> {
-  if (limitUsd <= 0) return 0
-  const dailyCost = await getDailyCost()
-  return (dailyCost / limitUsd) * 100
-}
-
-/**
  * Limpa registros antigos (mais de N dias)
  *
  * @param daysToKeep - Número de dias para manter (default: 90)
@@ -358,3 +374,4 @@ export async function cleanupOldLogs(daysToKeep: number = 90): Promise<number> {
   )
   return result.rowsAffected
 }
+

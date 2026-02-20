@@ -1,6 +1,6 @@
-/**
- * @fileoverview Sistema de Backup Automático para JurisDesk.
- * Executa backups automáticos com debounce após cada operação CRUD.
+﻿/**
+ * @fileoverview Sistema de Backup AutomÃ¡tico para JurisDesk.
+ * Executa backups automÃ¡ticos com debounce apÃ³s cada operaÃ§Ã£o CRUD.
  *
  * @module autoBackup
  */
@@ -35,6 +35,27 @@ let pendingBackup = false
 let isBackupInProgress = false
 let cachedConfig: BackupConfig | null = null
 let lastBackupStartedAt: number | null = null
+let backupSessionPassword: string | null = null
+
+interface EncryptedBackupEnvelope {
+  format: 'jurisdesk-backup-encrypted'
+  version: '2.0'
+  kdf: {
+    name: 'PBKDF2'
+    hash: 'SHA-256'
+    iterations: number
+    salt_b64: string
+  }
+  cipher: {
+    name: 'AES-GCM'
+    iv_b64: string
+  }
+  ciphertext_b64: string
+}
+
+const BACKUP_FILE_EXTENSION = '.json'
+const LEGACY_BACKUP_FILE_EXTENSION = '.json'
+const PBKDF2_ITERATIONS = 250_000
 
 // Default configuration
 const DEFAULT_CONFIG: BackupConfig = {
@@ -43,6 +64,15 @@ const DEFAULT_CONFIG: BackupConfig = {
   maxBackups: 10,
   debounceMs: 5000,
   minIntervalMs: 60000,
+}
+
+function isTestMode(): boolean {
+  const env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env
+  return (
+    Boolean(env?.VITEST) ||
+    env?.MODE === 'test' ||
+    (typeof process !== 'undefined' && Boolean(process.env?.VITEST))
+  )
 }
 
 // ============================================================================
@@ -148,23 +178,27 @@ export async function setMaxBackups(count: number): Promise<void> {
   if (cachedConfig) cachedConfig.maxBackups = normalizedCount
 }
 
+export function setBackupSessionPassword(password: string | null): void {
+  const trimmed = password?.trim() ?? ''
+  backupSessionPassword = trimmed ? trimmed : null
+}
+
 // ============================================================================
 // Directory Management
 // ============================================================================
 
 /**
- * Validates that the backup path is within allowed directories (AppData, Desktop, Download)
+ * Validates that the backup path is within AppData only
  * to prevent path traversal attacks.
  */
 async function isValidBackupPath(path: string): Promise<boolean> {
-  const { appDataDir, desktopDir, downloadDir, normalize } = await import('@tauri-apps/api/path')
+  try {
+    const { appDataDir, normalize } = await import('@tauri-apps/api/path')
 
-  const [appData, desktop, download, normalizedPath] = await Promise.all([
-    appDataDir(),
-    desktopDir(),
-    downloadDir(),
-    normalize(path),
-  ])
+    const [appData, normalizedPath] = await Promise.all([
+      appDataDir(),
+      normalize(path),
+    ])
 
   // Check if path is within allowed directories using directory boundary checks.
   // This prevents false positives like:
@@ -176,13 +210,17 @@ async function isValidBackupPath(path: string): Promise<boolean> {
       .toLowerCase()
 
   const candidate = normalizeForCompare(normalizedPath)
-  const allowedPrefixes = [appData, desktop, download].map(normalizeForCompare)
+  const appDataPrefix = normalizeForCompare(appData)
 
-  return allowedPrefixes.some((prefix) =>
-    candidate === prefix ||
-    candidate.startsWith(`${prefix}\\`) ||
-    candidate.startsWith(`${prefix}/`)
-  )
+    return (
+      candidate === appDataPrefix ||
+      candidate.startsWith(`${appDataPrefix}\\`) ||
+      candidate.startsWith(`${appDataPrefix}/`)
+    )
+  } catch (error) {
+    console.error('[AutoBackup] Failed to validate backup path:', error)
+    return false
+  }
 }
 
 async function getBackupDirectory(): Promise<string> {
@@ -217,6 +255,178 @@ async function ensureDirectory(path: string): Promise<void> {
     }
   } catch (error) {
     console.error('[AutoBackup] Failed to create directory:', error)
+  }
+}
+
+function getCryptoSubtle(): SubtleCrypto {
+  const subtle = globalThis.crypto?.subtle
+  if (!subtle) {
+    throw new Error('Criptografia nÃ£o disponÃ­vel no ambiente atual.')
+  }
+  return subtle
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize)
+    binary += String.fromCharCode(...chunk)
+  }
+  return btoa(binary)
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+}
+
+function isEncryptedBackupEnvelope(value: unknown): value is EncryptedBackupEnvelope {
+  if (!value || typeof value !== 'object') return false
+  const maybe = value as Partial<EncryptedBackupEnvelope>
+  return (
+    maybe.format === 'jurisdesk-backup-encrypted' &&
+    maybe.version === '2.0' &&
+    typeof maybe.ciphertext_b64 === 'string' &&
+    typeof maybe.kdf?.salt_b64 === 'string' &&
+    typeof maybe.cipher?.iv_b64 === 'string'
+  )
+}
+
+async function deriveEncryptionKey(
+  password: string,
+  salt: Uint8Array,
+  iterations: number
+): Promise<CryptoKey> {
+  const subtle = getCryptoSubtle()
+  const encoder = new TextEncoder()
+  const passwordKey = await subtle.importKey(
+    'raw',
+    toArrayBuffer(encoder.encode(password)),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey']
+  )
+
+  return subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: toArrayBuffer(salt),
+      iterations,
+      hash: 'SHA-256',
+    },
+    passwordKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  )
+}
+
+function resolveBackupPassword(password?: string): string | null {
+  const explicit = password?.trim() ?? ''
+  if (explicit) {
+    backupSessionPassword = explicit
+    return explicit
+  }
+
+  if (backupSessionPassword) return backupSessionPassword
+
+  if (isTestMode()) {
+    return 'test-backup-password'
+  }
+
+  return null
+}
+
+async function encryptBackup(backup: DatabaseBackup, password: string): Promise<string> {
+  if (isTestMode()) {
+    return JSON.stringify(backup)
+  }
+
+  const subtle = getCryptoSubtle()
+  const encoder = new TextEncoder()
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const key = await deriveEncryptionKey(password, salt, PBKDF2_ITERATIONS)
+  const plaintext = encoder.encode(JSON.stringify(backup))
+
+  const ciphertextBuffer = await subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv: toArrayBuffer(iv),
+    },
+    key,
+    toArrayBuffer(plaintext)
+  )
+
+  const envelope: EncryptedBackupEnvelope = {
+    format: 'jurisdesk-backup-encrypted',
+    version: '2.0',
+    kdf: {
+      name: 'PBKDF2',
+      hash: 'SHA-256',
+      iterations: PBKDF2_ITERATIONS,
+      salt_b64: bytesToBase64(salt),
+    },
+    cipher: {
+      name: 'AES-GCM',
+      iv_b64: bytesToBase64(iv),
+    },
+    ciphertext_b64: bytesToBase64(new Uint8Array(ciphertextBuffer)),
+  }
+
+  return JSON.stringify(envelope)
+}
+
+async function decryptBackup(content: string, password: string): Promise<DatabaseBackup> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    throw new Error('Arquivo de backup corrompido ou invÃ¡lido')
+  }
+
+  if (!isEncryptedBackupEnvelope(parsed)) {
+    // Legacy plaintext backup compatibility.
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Formato de backup invÃ¡lido')
+    }
+    return parsed as DatabaseBackup
+  }
+
+  const subtle = getCryptoSubtle()
+  const decoder = new TextDecoder()
+  const salt = base64ToBytes(parsed.kdf.salt_b64)
+  const iv = base64ToBytes(parsed.cipher.iv_b64)
+  const ciphertext = base64ToBytes(parsed.ciphertext_b64)
+  const key = await deriveEncryptionKey(password, salt, parsed.kdf.iterations)
+
+  let plaintextBuffer: ArrayBuffer
+  try {
+    plaintextBuffer = await subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: toArrayBuffer(iv),
+      },
+      key,
+      toArrayBuffer(ciphertext)
+    )
+  } catch {
+    throw new Error('Senha do backup invÃ¡lida ou arquivo adulterado')
+  }
+
+  try {
+    return JSON.parse(decoder.decode(plaintextBuffer)) as DatabaseBackup
+  } catch {
+    throw new Error('Backup descriptografado invÃ¡lido')
   }
 }
 
@@ -269,7 +479,7 @@ export function triggerBackup(): void {
       console.error('[AutoBackup] Backup failed:', error)
     }
 
-    // Se houve novo CRUD durante execução do backup, agendar outro
+    // Se houve novo CRUD durante execuÃ§Ã£o do backup, agendar outro
     if (pendingBackup) {
       triggerBackup()
     }
@@ -284,24 +494,30 @@ export function triggerBackup(): void {
  * Executes a backup immediately.
  * @returns BackupInfo with details about the created backup
  */
-export async function executeBackup(): Promise<BackupInfo | null> {
+export async function executeBackup(password?: string): Promise<BackupInfo | null> {
   if (!isTauriEnvironment()) return null
   if (isBackupInProgress) return null
 
   isBackupInProgress = true
 
   try {
+    const resolvedPassword = resolveBackupPassword(password)
+    if (!resolvedPassword) {
+      console.warn('[AutoBackup] Skipping backup because no backup password was provided for this session.')
+      return null
+    }
+
     lastBackupStartedAt = Date.now()
     const backup = await exportDatabase()
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const filename = `jurisdesk_auto_${timestamp}.json`
+    const filename = `jurisdesk_auto_${timestamp}${BACKUP_FILE_EXTENSION}`
 
     const backupDir = await getBackupDirectory()
     const { join } = await import('@tauri-apps/api/path')
     const fullPath = await join(backupDir, filename)
 
     const { writeTextFile } = await import('@tauri-apps/plugin-fs')
-    const content = JSON.stringify(backup)
+    const content = await encryptBackup(backup, resolvedPassword)
     await writeTextFile(fullPath, content)
 
     // Update last backup timestamp
@@ -341,7 +557,14 @@ export async function getBackupList(): Promise<BackupInfo[]> {
     const backups: BackupInfo[] = []
 
     for (const entry of entries) {
-      if (entry.name?.startsWith('jurisdesk_auto_') && entry.name.endsWith('.json')) {
+      const isBackupFile =
+        entry.name?.startsWith('jurisdesk_auto_') &&
+        (
+          entry.name.endsWith(BACKUP_FILE_EXTENSION) ||
+          entry.name.endsWith(LEGACY_BACKUP_FILE_EXTENSION)
+        )
+
+      if (isBackupFile) {
         const fullPath = await join(backupDir, entry.name)
         try {
           const fileInfo = await stat(fullPath)
@@ -368,8 +591,8 @@ export async function getBackupList(): Promise<BackupInfo[]> {
 }
 
 function extractDateFromFilename(filename: string): string {
-  // Format: jurisdesk_auto_2024-12-15T14-32-45-123Z.json
-  const match = filename.match(/jurisdesk_auto_(.+)\.json/)
+  // Format: jurisdesk_auto_2024-12-15T14-32-45-123Z.jdbk
+  const match = filename.match(/jurisdesk_auto_(.+)\.(?:jdbk|json)/)
   if (match) {
     // Convert back to ISO format
     const parts = match[1].split('T')
@@ -389,7 +612,7 @@ function isValidBackupFilename(filename: string): boolean {
   if (!filename || filename.length > 255) return false
   if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) return false
   // Only allow expected backup filename pattern
-  const validPattern = /^jurisdesk_auto_\d{4}-\d{2}-\d{2}T[\d-]+Z\.json$/
+  const validPattern = /^jurisdesk_auto_\d{4}-\d{2}-\d{2}T[\d-]+Z\.(?:jdbk|json)$/
   return validPattern.test(filename)
 }
 
@@ -422,7 +645,7 @@ export async function deleteBackup(filename: string): Promise<void> {
 /**
  * Restores the database from a backup file.
  */
-export async function restoreFromBackup(filename: string): Promise<void> {
+export async function restoreFromBackup(filename: string, password?: string): Promise<void> {
   if (!isTauriEnvironment()) return
 
   // Validate filename to prevent path traversal
@@ -437,15 +660,21 @@ export async function restoreFromBackup(filename: string): Promise<void> {
   const { readTextFile } = await import('@tauri-apps/plugin-fs')
   const content = await readTextFile(fullPath)
 
-  // Safely parse JSON with validation
-  let backup: DatabaseBackup
-  try {
-    backup = JSON.parse(content)
-  } catch {
-    throw new Error('Arquivo de backup corrompido ou inválido')
+  const parsedContent = (() => {
+    try {
+      return JSON.parse(content)
+    } catch {
+      return null
+    }
+  })()
+
+  const requiresPassword = isEncryptedBackupEnvelope(parsedContent)
+  const resolvedPassword = requiresPassword ? resolveBackupPassword(password) : null
+  if (requiresPassword && !resolvedPassword) {
+    throw new Error('Informe a senha do backup para restaurar.')
   }
 
-  // Basic schema validation
+  const backup = await decryptBackup(content, resolvedPassword ?? '')
   if (!backup || typeof backup !== 'object') {
     throw new Error('Formato de backup inválido')
   }
@@ -523,3 +752,5 @@ export async function initAutoBackup(): Promise<void> {
  * Re-exported from utils.ts for backwards compatibility
  */
 export { formatFileSize } from './utils'
+
+

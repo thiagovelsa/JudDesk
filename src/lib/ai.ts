@@ -854,10 +854,12 @@ export async function testAPIConnection(
       }
 
       case 'gemini': {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
-          { method: 'GET' }
-        )
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+          method: 'GET',
+          headers: {
+            'x-goog-api-key': apiKey,
+          },
+        })
 
         if (response.ok) {
           return { success: true }

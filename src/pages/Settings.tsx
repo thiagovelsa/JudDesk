@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+﻿import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
 import {
   Key,
@@ -67,25 +67,25 @@ const sections: SettingsSection[] = [
     id: 'interface',
     icon: Scale,
     title: 'Interface',
-    description: 'Densidade e preferências visuais',
+    description: 'Densidade e preferÃªncias visuais',
   },
   {
     id: 'ai',
     icon: Bot,
-    title: 'Inteligência Artificial',
+    title: 'InteligÃªncia Artificial',
     description: 'Configure os provedores de IA e modelos',
   },
   {
     id: 'notifications',
     icon: Bell,
-    title: 'Notificações',
+    title: 'NotificaÃ§Ãµes',
     description: 'Configure alertas e lembretes',
   },
   {
     id: 'database',
     icon: Database,
     title: 'Banco de Dados',
-    description: 'Backup e exportação de dados',
+    description: 'Backup e exportaÃ§Ã£o de dados',
   },
 ]
 
@@ -166,14 +166,12 @@ export default function Settings() {
   const [claudeThinkingEnabled, setClaudeThinkingEnabled] = useState(true)
   const [claudeWebSearchEnabled, setClaudeWebSearchEnabled] = useState(true)
   const [claudeCacheEnabled, setClaudeCacheEnabled] = useState(true)
-  const [claudeDailyLimitUsd, setClaudeDailyLimitUsd] = useState('5.00')
   const [claudeShowCosts, setClaudeShowCosts] = useState(true)
 
   // OpenAI/GPT-5 Advanced Settings
   const [openaiReasoningEnabled, setOpenaiReasoningEnabled] = useState(true)
   const [openaiWebSearchEnabled, setOpenaiWebSearchEnabled] = useState(true)
   const [openaiCacheEnabled, setOpenaiCacheEnabled] = useState(true)
-  const [openaiDailyLimitUsd, setOpenaiDailyLimitUsd] = useState('2.00')
   const [openaiShowCosts, setOpenaiShowCosts] = useState(true)
 
   // Google Gemini API
@@ -185,10 +183,9 @@ export default function Settings() {
   // Gemini Advanced Settings
   const [geminiThinkingEnabled, setGeminiThinkingEnabled] = useState(true)
   const [geminiWebSearchEnabled, setGeminiWebSearchEnabled] = useState(true)
-  const [geminiDailyLimitUsd, setGeminiDailyLimitUsd] = useState('3.00')
   const [geminiShowCosts, setGeminiShowCosts] = useState(true)
 
-  const { setSetting, fetchSettings, loading: settingsLoading } = useSettingsStore()
+  const { setSetting, setSettingsBatch, fetchSettings, loading: settingsLoading } = useSettingsStore()
   const { fetchClients } = useClientStore()
   const { fetchCases } = useCaseStore()
   const { fetchDocuments } = useDocumentStore()
@@ -247,26 +244,22 @@ export default function Settings() {
     const thinking = settings['claude_thinking_enabled']
     const webSearch = settings['claude_web_search_enabled']
     const cache = settings['claude_cache_enabled']
-    const dailyLimit = settings['claude_daily_limit_usd']
     const showCosts = settings['claude_show_costs']
 
     if (thinking !== null) setClaudeThinkingEnabled(thinking !== 'false')
     if (webSearch !== null) setClaudeWebSearchEnabled(webSearch !== 'false')
     if (cache !== null) setClaudeCacheEnabled(cache !== 'false')
-    if (dailyLimit) setClaudeDailyLimitUsd(dailyLimit)
     if (showCosts !== null) setClaudeShowCosts(showCosts !== 'false')
 
     // Load OpenAI/GPT-5 Advanced Settings
     const openaiReasoning = settings['openai_reasoning_enabled']
     const openaiWebSearch = settings['openai_web_search_enabled']
     const openaiCache = settings['openai_cache_enabled']
-    const openaiDailyLimit = settings['openai_daily_limit_usd']
     const openaiShowCosts = settings['openai_show_costs']
 
     if (openaiReasoning !== null) setOpenaiReasoningEnabled(openaiReasoning !== 'false')
     if (openaiWebSearch !== null) setOpenaiWebSearchEnabled(openaiWebSearch !== 'false')
     if (openaiCache !== null) setOpenaiCacheEnabled(openaiCache !== 'false')
-    if (openaiDailyLimit) setOpenaiDailyLimitUsd(openaiDailyLimit)
     if (openaiShowCosts !== null) setOpenaiShowCosts(openaiShowCosts !== 'false')
 
     // Load Google Gemini API key
@@ -276,12 +269,10 @@ export default function Settings() {
     // Load Gemini Advanced Settings
     const geminiThinking = settings['gemini_thinking_enabled']
     const geminiWebSearch = settings['gemini_web_search_enabled']
-    const geminiDailyLimit = settings['gemini_daily_limit_usd']
     const geminiShowCosts = settings['gemini_show_costs']
 
     if (geminiThinking !== null) setGeminiThinkingEnabled(geminiThinking !== 'false')
     if (geminiWebSearch !== null) setGeminiWebSearchEnabled(geminiWebSearch !== 'false')
-    if (geminiDailyLimit) setGeminiDailyLimitUsd(geminiDailyLimit)
     if (geminiShowCosts !== null) setGeminiShowCosts(geminiShowCosts !== 'false')
   }
 
@@ -303,33 +294,28 @@ export default function Settings() {
 
   const handleSave = async () => {
     if (isTauri) {
-      // Save to database
+      // Save API keys to secure keychain storage
       await setSetting('claude_api_key', claudeApiKey)
       await setSetting('openai_api_key', openaiApiKey)
-      await setSetting('default_provider', defaultProvider)
-      await setSetting('default_model', defaultModel)
-      await setSetting('ollama_url', ollamaUrl)
-
-      // Save Claude Advanced Settings
-      await setSetting('claude_thinking_enabled', claudeThinkingEnabled.toString())
-      await setSetting('claude_web_search_enabled', claudeWebSearchEnabled.toString())
-      await setSetting('claude_cache_enabled', claudeCacheEnabled.toString())
-      await setSetting('claude_daily_limit_usd', claudeDailyLimitUsd)
-      await setSetting('claude_show_costs', claudeShowCosts.toString())
-
-      // Save OpenAI/GPT-5 Advanced Settings
-      await setSetting('openai_reasoning_enabled', openaiReasoningEnabled.toString())
-      await setSetting('openai_web_search_enabled', openaiWebSearchEnabled.toString())
-      await setSetting('openai_cache_enabled', openaiCacheEnabled.toString())
-      await setSetting('openai_daily_limit_usd', openaiDailyLimitUsd)
-      await setSetting('openai_show_costs', openaiShowCosts.toString())
-
-      // Save Gemini API Key and Settings
       await setSetting('gemini_api_key', geminiApiKey)
-      await setSetting('gemini_thinking_enabled', geminiThinkingEnabled.toString())
-      await setSetting('gemini_web_search_enabled', geminiWebSearchEnabled.toString())
-      await setSetting('gemini_daily_limit_usd', geminiDailyLimitUsd)
-      await setSetting('gemini_show_costs', geminiShowCosts.toString())
+
+      // Save the rest atomically to avoid partial settings state.
+      await setSettingsBatch([
+        { key: 'default_provider', value: defaultProvider },
+        { key: 'default_model', value: defaultModel },
+        { key: 'ollama_url', value: ollamaUrl },
+        { key: 'claude_thinking_enabled', value: claudeThinkingEnabled.toString() },
+        { key: 'claude_web_search_enabled', value: claudeWebSearchEnabled.toString() },
+        { key: 'claude_cache_enabled', value: claudeCacheEnabled.toString() },
+        { key: 'claude_show_costs', value: claudeShowCosts.toString() },
+        { key: 'openai_reasoning_enabled', value: openaiReasoningEnabled.toString() },
+        { key: 'openai_web_search_enabled', value: openaiWebSearchEnabled.toString() },
+        { key: 'openai_cache_enabled', value: openaiCacheEnabled.toString() },
+        { key: 'openai_show_costs', value: openaiShowCosts.toString() },
+        { key: 'gemini_thinking_enabled', value: geminiThinkingEnabled.toString() },
+        { key: 'gemini_web_search_enabled', value: geminiWebSearchEnabled.toString() },
+        { key: 'gemini_show_costs', value: geminiShowCosts.toString() },
+      ])
     }
     setSaved(true)
     if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current)
@@ -396,9 +382,9 @@ export default function Settings() {
   }, [])
 
   const getDbRefreshLabel = () => {
-    if (!lastDbRefreshAt) return 'Aguardando atualização'
+    if (!lastDbRefreshAt) return 'Aguardando atualizaÃ§Ã£o'
     if (dbUpdatedNow) return 'Atualizado agora'
-    return `Atualizado às ${new Date(lastDbRefreshAt).toLocaleTimeString('pt-BR')}`
+    return `Atualizado Ã s ${new Date(lastDbRefreshAt).toLocaleTimeString('pt-BR')}`
   }
 
   // Load database stats when switching to database section
@@ -474,7 +460,7 @@ export default function Settings() {
         const backup = JSON.parse(content) as DatabaseBackup
 
         if (!backup.version || !backup.clients) {
-          setBackupMessage({ type: 'error', text: 'Arquivo de backup inválido.' })
+          setBackupMessage({ type: 'error', text: 'Arquivo de backup invÃ¡lido.' })
           return
         }
 
@@ -526,7 +512,7 @@ export default function Settings() {
       const csv = await exportTableAsCSV(tableName)
 
       if (!csv) {
-        setBackupMessage({ type: 'error', text: `Tabela ${tableName} está vazia.` })
+        setBackupMessage({ type: 'error', text: `Tabela ${tableName} estÃ¡ vazia.` })
         return
       }
 
@@ -566,7 +552,7 @@ export default function Settings() {
       setClaudeTestStatus('success')
     } else {
       setClaudeTestStatus('error')
-      setClaudeTestError(result.error || 'Falha na conexão')
+      setClaudeTestError(result.error || 'Falha na conexÃ£o')
     }
   }
 
@@ -585,7 +571,7 @@ export default function Settings() {
       setOpenaiTestStatus('success')
     } else {
       setOpenaiTestStatus('error')
-      setOpenaiTestError(result.error || 'Falha na conexão')
+      setOpenaiTestError(result.error || 'Falha na conexÃ£o')
     }
   }
 
@@ -604,7 +590,7 @@ export default function Settings() {
       setGeminiTestStatus('success')
     } else {
       setGeminiTestStatus('error')
-      setGeminiTestError(result.error || 'Falha na conexão')
+      setGeminiTestError(result.error || 'Falha na conexÃ£o')
     }
   }
 
@@ -621,9 +607,9 @@ export default function Settings() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Configurações</h1>
+        <h1 className="text-2xl font-bold text-white">ConfiguraÃ§Ãµes</h1>
         <p className="text-gray-400 text-sm mt-1">
-          Gerencie as configurações do sistema
+          Gerencie as configuraÃ§Ãµes do sistema
         </p>
       </div>
 
@@ -664,7 +650,7 @@ export default function Settings() {
               </h2>
 
               <p className="text-sm text-gray-400">
-                Configure seu nome e registro profissional. Essas informações serão exibidas na interface do sistema.
+                Configure seu nome e registro profissional. Essas informaÃ§Ãµes serÃ£o exibidas na interface do sistema.
               </p>
 
               {/* Name */}
@@ -676,7 +662,7 @@ export default function Settings() {
                   type="text"
                   value={lawyerName}
                   onChange={(e) => setLawyerName(e.target.value)}
-                  placeholder="Ex: Dr. João Silva"
+                  placeholder="Ex: Dr. JoÃ£o Silva"
                   className="w-full bg-background-dark border border-border-dark rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
@@ -740,7 +726,7 @@ export default function Settings() {
               </h2>
 
               <p className="text-sm text-gray-400">
-                Ajuste a densidade da interface para mostrar mais ou menos informação por tela.
+                Ajuste a densidade da interface para mostrar mais ou menos informaÃ§Ã£o por tela.
               </p>
 
               <div className="space-y-2">
@@ -749,7 +735,7 @@ export default function Settings() {
                   <label className="flex items-center justify-between p-3 bg-background-dark rounded-lg cursor-pointer border border-border-dark">
                     <div>
                       <p className="text-sm text-white">Normal</p>
-                      <p className="text-xs text-gray-500">Mais confortável para leitura contínua</p>
+                      <p className="text-xs text-gray-500">Mais confortÃ¡vel para leitura contÃ­nua</p>
                     </div>
                     <input
                       type="radio"
@@ -764,7 +750,7 @@ export default function Settings() {
                   <label className="flex items-center justify-between p-3 bg-background-dark rounded-lg cursor-pointer border border-border-dark">
                     <div>
                       <p className="text-sm text-white">Compacto</p>
-                      <p className="text-xs text-gray-500">Mais itens visíveis, menos scroll</p>
+                      <p className="text-xs text-gray-500">Mais itens visÃ­veis, menos scroll</p>
                     </div>
                     <input
                       type="radio"
@@ -781,13 +767,13 @@ export default function Settings() {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-white">Movimento da Interface</label>
                 <p className="text-xs text-gray-500">
-                  Controla animações de transição e hover. "Sistema" respeita a preferência de redução de movimento do sistema operacional.
+                  Controla animaÃ§Ãµes de transiÃ§Ã£o e hover. "Sistema" respeita a preferÃªncia de reduÃ§Ã£o de movimento do sistema operacional.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <label className="flex items-center justify-between p-3 bg-background-dark rounded-lg cursor-pointer border border-border-dark">
                     <div>
                       <p className="text-sm text-white">Sistema</p>
-                      <p className="text-xs text-gray-500">Usar preferência do sistema</p>
+                      <p className="text-xs text-gray-500">Usar preferÃªncia do sistema</p>
                     </div>
                     <input
                       type="radio"
@@ -802,7 +788,7 @@ export default function Settings() {
                   <label className="flex items-center justify-between p-3 bg-background-dark rounded-lg cursor-pointer border border-border-dark">
                     <div>
                       <p className="text-sm text-white">Normal</p>
-                      <p className="text-xs text-gray-500">Transições sutis ativas</p>
+                      <p className="text-xs text-gray-500">TransiÃ§Ãµes sutis ativas</p>
                     </div>
                     <input
                       type="radio"
@@ -817,7 +803,7 @@ export default function Settings() {
                   <label className="flex items-center justify-between p-3 bg-background-dark rounded-lg cursor-pointer border border-border-dark">
                     <div>
                       <p className="text-sm text-white">Reduzido</p>
-                      <p className="text-xs text-gray-500">Minimiza animações</p>
+                      <p className="text-xs text-gray-500">Minimiza animaÃ§Ãµes</p>
                     </div>
                     <input
                       type="radio"
@@ -868,7 +854,7 @@ export default function Settings() {
             <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="bg-surface-dark border border-border-dark rounded-xl p-6 space-y-6">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <Bot className="size-5 text-primary" />
-                Configuração de IA
+                ConfiguraÃ§Ã£o de IA
               </h2>
 
               {/* Ollama */}
@@ -951,13 +937,13 @@ export default function Settings() {
                         Testando...
                       </span>
                     ) : (
-                      'Testar Conexão'
+                      'Testar ConexÃ£o'
                     )}
                   </button>
                   {claudeTestStatus === 'success' && (
                     <span className="flex items-center gap-1 text-xs text-green-500">
                       <CheckCircle className="size-4" />
-                      Conexão válida!
+                      ConexÃ£o vÃ¡lida!
                     </span>
                   )}
                   {claudeTestStatus === 'error' && (
@@ -1010,13 +996,13 @@ export default function Settings() {
                         Testando...
                       </span>
                     ) : (
-                      'Testar Conexão'
+                      'Testar ConexÃ£o'
                     )}
                   </button>
                   {openaiTestStatus === 'success' && (
                     <span className="flex items-center gap-1 text-xs text-green-500">
                       <CheckCircle className="size-4" />
-                      Conexão válida!
+                      ConexÃ£o vÃ¡lida!
                     </span>
                   )}
                   {openaiTestStatus === 'error' && (
@@ -1069,13 +1055,13 @@ export default function Settings() {
                         Testando...
                       </span>
                     ) : (
-                      'Testar Conexão'
+                      'Testar ConexÃ£o'
                     )}
                   </button>
                   {geminiTestStatus === 'success' && (
                     <span className="flex items-center gap-1 text-xs text-green-500">
                       <CheckCircle className="size-4" />
-                      Conexão válida!
+                      ConexÃ£o vÃ¡lida!
                     </span>
                   )}
                   {geminiTestStatus === 'error' && (
@@ -1089,7 +1075,7 @@ export default function Settings() {
 
               {/* Default Provider */}
               <div className="space-y-3">
-                <label htmlFor="default-provider" className="text-sm font-medium text-white">Provider Padrão</label>
+                <label htmlFor="default-provider" className="text-sm font-medium text-white">Provider PadrÃ£o</label>
                 <select
                   id="default-provider"
                   name="defaultProvider"
@@ -1106,7 +1092,7 @@ export default function Settings() {
 
               {/* Default Model */}
               <div className="space-y-3">
-                <label htmlFor="default-model" className="text-sm font-medium text-white">Modelo Padrão</label>
+                <label htmlFor="default-model" className="text-sm font-medium text-white">Modelo PadrÃ£o</label>
                 <input
                   id="default-model"
                   name="defaultModel"
@@ -1126,7 +1112,7 @@ export default function Settings() {
                 <div className="space-y-4 pt-6 border-t border-border-dark">
                   <h3 className="text-sm font-medium text-white flex items-center gap-2">
                     <Brain className="size-4 text-purple-400" />
-                    Configurações Avançadas do Claude
+                    ConfiguraÃ§Ãµes AvanÃ§adas do Claude
                   </h3>
 
                   {/* Extended Thinking Toggle */}
@@ -1135,7 +1121,7 @@ export default function Settings() {
                       <Brain className="size-5 text-purple-400" />
                       <div>
                         <p className="text-sm text-white">Extended Thinking</p>
-                        <p className="text-xs text-gray-500">Raciocínio mais profundo em tarefas complexas</p>
+                        <p className="text-xs text-gray-500">RaciocÃ­nio mais profundo em tarefas complexas</p>
                       </div>
                     </div>
                     <input
@@ -1152,7 +1138,7 @@ export default function Settings() {
                       <Search className="size-5 text-blue-400" />
                       <div>
                         <p className="text-sm text-white">Web Search</p>
-                        <p className="text-xs text-gray-500">Busca informações atualizadas na internet</p>
+                        <p className="text-xs text-gray-500">Busca informaÃ§Ãµes atualizadas na internet</p>
                       </div>
                     </div>
                     <input
@@ -1169,7 +1155,7 @@ export default function Settings() {
                       <Zap className="size-5 text-yellow-400" />
                       <div>
                         <p className="text-sm text-white">Prompt Caching</p>
-                        <p className="text-xs text-gray-500">Reduz custos em conversas longas (até 90%)</p>
+                        <p className="text-xs text-gray-500">Reduz custos em conversas longas (atÃ© 90%)</p>
                       </div>
                     </div>
                     <input
@@ -1179,26 +1165,6 @@ export default function Settings() {
                       className="size-5 rounded border-gray-600 bg-surface-highlight text-primary focus:ring-primary focus:ring-offset-0"
                     />
                   </label>
-
-                  {/* Daily Limit Input */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-white flex items-center gap-2">
-                      <DollarSign className="size-4 text-green-400" />
-                      Limite Diário (USD)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.50"
-                      min="0"
-                      value={claudeDailyLimitUsd}
-                      onChange={(e) => setClaudeDailyLimitUsd(e.target.value)}
-                      placeholder="5.00"
-                      className="w-full bg-background-dark border border-border-dark rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Define um limite diário de gastos com a API. Use 0 para desativar.
-                    </p>
-                  </div>
 
                   {/* Show Costs Toggle */}
                   <label className="flex items-center justify-between p-3 bg-background-dark rounded-lg cursor-pointer">
@@ -1224,10 +1190,10 @@ export default function Settings() {
                 <div className="space-y-4 pt-6 border-t border-border-dark">
                   <h3 className="text-sm font-medium text-white flex items-center gap-2">
                     <Brain className="size-4 text-emerald-400" />
-                    Configurações Avançadas do GPT-5 Mini
+                    ConfiguraÃ§Ãµes AvanÃ§adas do GPT-5 Mini
                   </h3>
                   <p className="text-xs text-gray-500">
-                    O GPT-5 Mini utiliza a nova Responses API com reasoning integrado e é ~75% mais barato que o Claude.
+                    O GPT-5 Mini utiliza a nova Responses API com reasoning integrado e Ã© ~75% mais barato que o Claude.
                   </p>
 
                   {/* Reasoning Toggle */}
@@ -1235,8 +1201,8 @@ export default function Settings() {
                     <div className="flex items-center gap-3">
                       <Brain className="size-5 text-emerald-400" />
                       <div>
-                        <p className="text-sm text-white">Reasoning (Raciocínio)</p>
-                        <p className="text-xs text-gray-500">Ativa raciocínio adaptativo por tipo de tarefa</p>
+                        <p className="text-sm text-white">Reasoning (RaciocÃ­nio)</p>
+                        <p className="text-xs text-gray-500">Ativa raciocÃ­nio adaptativo por tipo de tarefa</p>
                       </div>
                     </div>
                     <input
@@ -1253,7 +1219,7 @@ export default function Settings() {
                       <Search className="size-5 text-blue-400" />
                       <div>
                         <p className="text-sm text-white">Web Search</p>
-                        <p className="text-xs text-gray-500">Busca informações atualizadas na internet</p>
+                        <p className="text-xs text-gray-500">Busca informaÃ§Ãµes atualizadas na internet</p>
                       </div>
                     </div>
                     <input
@@ -1270,7 +1236,7 @@ export default function Settings() {
                       <Zap className="size-5 text-yellow-400" />
                       <div>
                         <p className="text-sm text-white">Prompt Caching</p>
-                        <p className="text-xs text-gray-500">Cache automático com 90% de desconto</p>
+                        <p className="text-xs text-gray-500">Cache automÃ¡tico com 90% de desconto</p>
                       </div>
                     </div>
                     <input
@@ -1280,26 +1246,6 @@ export default function Settings() {
                       className="size-5 rounded border-gray-600 bg-surface-highlight text-primary focus:ring-primary focus:ring-offset-0"
                     />
                   </label>
-
-                  {/* Daily Limit Input */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-white flex items-center gap-2">
-                      <DollarSign className="size-4 text-green-400" />
-                      Limite Diário (USD)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.50"
-                      min="0"
-                      value={openaiDailyLimitUsd}
-                      onChange={(e) => setOpenaiDailyLimitUsd(e.target.value)}
-                      placeholder="2.00"
-                      className="w-full bg-background-dark border border-border-dark rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Define um limite diário de gastos com a API. Use 0 para desativar.
-                    </p>
-                  </div>
 
                   {/* Show Costs Toggle */}
                   <label className="flex items-center justify-between p-3 bg-background-dark rounded-lg cursor-pointer">
@@ -1320,9 +1266,9 @@ export default function Settings() {
 
                   {/* Pricing Info */}
                   <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                    <p className="text-xs text-emerald-400 font-medium mb-1">Preços GPT-5 Mini</p>
+                    <p className="text-xs text-emerald-400 font-medium mb-1">PreÃ§os GPT-5 Mini</p>
                     <p className="text-xs text-gray-400">
-                      Input: $0.25/MTok • Output: $2.00/MTok • Cache: 90% desconto
+                      Input: $0.25/MTok â€¢ Output: $2.00/MTok â€¢ Cache: 90% desconto
                     </p>
                   </div>
                 </div>
@@ -1333,10 +1279,10 @@ export default function Settings() {
                 <div className="space-y-4 pt-6 border-t border-border-dark">
                   <h3 className="text-sm font-medium text-white flex items-center gap-2">
                     <Brain className="size-4 text-cyan-400" />
-                    Configurações Avançadas do Gemini 3 Flash
+                    ConfiguraÃ§Ãµes AvanÃ§adas do Gemini 3 Flash
                   </h3>
                   <p className="text-xs text-gray-500">
-                    O Gemini 3 Flash utiliza thinking levels para controlar a profundidade do raciocínio e é 3x mais rápido que o Gemini 2.5 Pro.
+                    O Gemini 3 Flash utiliza thinking levels para controlar a profundidade do raciocÃ­nio e Ã© 3x mais rÃ¡pido que o Gemini 2.5 Pro.
                   </p>
 
                   {/* Thinking Toggle */}
@@ -1344,8 +1290,8 @@ export default function Settings() {
                     <div className="flex items-center gap-3">
                       <Brain className="size-5 text-cyan-400" />
                       <div>
-                        <p className="text-sm text-white">Thinking (Raciocínio)</p>
-                        <p className="text-xs text-gray-500">Ativa raciocínio adaptativo por tipo de tarefa</p>
+                        <p className="text-sm text-white">Thinking (RaciocÃ­nio)</p>
+                        <p className="text-xs text-gray-500">Ativa raciocÃ­nio adaptativo por tipo de tarefa</p>
                       </div>
                     </div>
                     <input
@@ -1362,7 +1308,7 @@ export default function Settings() {
                       <Search className="size-5 text-blue-400" />
                       <div>
                         <p className="text-sm text-white">Google Search Grounding</p>
-                        <p className="text-xs text-gray-500">Busca informações atualizadas no Google</p>
+                        <p className="text-xs text-gray-500">Busca informaÃ§Ãµes atualizadas no Google</p>
                       </div>
                     </div>
                     <input
@@ -1372,26 +1318,6 @@ export default function Settings() {
                       className="size-5 rounded border-gray-600 bg-surface-highlight text-primary focus:ring-primary focus:ring-offset-0"
                     />
                   </label>
-
-                  {/* Daily Limit Input */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-white flex items-center gap-2">
-                      <DollarSign className="size-4 text-green-400" />
-                      Limite Diário (USD)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.50"
-                      min="0"
-                      value={geminiDailyLimitUsd}
-                      onChange={(e) => setGeminiDailyLimitUsd(e.target.value)}
-                      placeholder="3.00"
-                      className="w-full bg-background-dark border border-border-dark rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Define um limite diário de gastos com a API. Use 0 para desativar.
-                    </p>
-                  </div>
 
                   {/* Show Costs Toggle */}
                   <label className="flex items-center justify-between p-3 bg-background-dark rounded-lg cursor-pointer">
@@ -1412,9 +1338,9 @@ export default function Settings() {
 
                   {/* Pricing Info */}
                   <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
-                    <p className="text-xs text-cyan-400 font-medium mb-1">Preços Gemini 3 Flash</p>
+                    <p className="text-xs text-cyan-400 font-medium mb-1">PreÃ§os Gemini 3 Flash</p>
                     <p className="text-xs text-gray-400">
-                      Input: $0.50/MTok • Output: $3.00/MTok • Context: 1M tokens
+                      Input: $0.50/MTok â€¢ Output: $3.00/MTok â€¢ Context: 1M tokens
                     </p>
                   </div>
                 </div>
@@ -1439,7 +1365,7 @@ export default function Settings() {
                   ) : (
                     <>
                       <Save className="size-4" />
-                      Salvar Configurações
+                      Salvar ConfiguraÃ§Ãµes
                     </>
                   )}
                 </button>
@@ -1451,7 +1377,7 @@ export default function Settings() {
             <form onSubmit={(e) => { e.preventDefault(); handleSaveNotifications(); }} className="bg-surface-dark border border-border-dark rounded-xl p-6 space-y-6">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <Bell className="size-5 text-primary" />
-                Notificações
+                NotificaÃ§Ãµes
               </h2>
 
               {/* Environment Warning */}
@@ -1462,7 +1388,7 @@ export default function Settings() {
                     Ambiente de Desenvolvimento
                   </div>
                   <p className="mt-1">
-                    Notificações só funcionam no ambiente Tauri. Execute com <code className="bg-yellow-500/20 px-1 rounded">npm run tauri dev</code>.
+                    NotificaÃ§Ãµes sÃ³ funcionam no ambiente Tauri. Execute com <code className="bg-yellow-500/20 px-1 rounded">npm run tauri dev</code>.
                   </p>
                 </div>
               )}
@@ -1470,15 +1396,15 @@ export default function Settings() {
               {/* Permission Status */}
               {isTauri && (
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-white">Permissão do Sistema</label>
+                  <label className="text-sm font-medium text-white">PermissÃ£o do Sistema</label>
                   <div className="flex items-center justify-between p-3 bg-background-dark rounded-lg">
                     <div className="flex items-center gap-3">
                       <BellRing className="size-5 text-gray-400" />
                       <div>
-                        <p className="text-sm text-white">Notificações do Sistema</p>
+                        <p className="text-sm text-white">NotificaÃ§Ãµes do Sistema</p>
                         <p className="text-xs text-gray-500">
-                          {notificationPermission === 'granted' && 'Permissão concedida'}
-                          {notificationPermission === 'denied' && 'Permissão negada'}
+                          {notificationPermission === 'granted' && 'PermissÃ£o concedida'}
+                          {notificationPermission === 'denied' && 'PermissÃ£o negada'}
                           {notificationPermission === 'checking' && 'Verificando...'}
                         </p>
                       </div>
@@ -1493,7 +1419,7 @@ export default function Settings() {
                         onClick={requestNotificationPermission}
                         className="px-3 py-1.5 bg-primary/10 text-primary rounded text-sm hover:bg-primary/20 transition-colors"
                       >
-                        Solicitar Permissão
+                        Solicitar PermissÃ£o
                       </button>
                     ) : (
                       <Loader2 className="size-4 text-gray-400 animate-spin" />
@@ -1504,13 +1430,13 @@ export default function Settings() {
 
               {/* Enable/Disable Notifications */}
               <div className="space-y-3">
-                <label className="text-sm font-medium text-white">Configurações Gerais</label>
+                <label className="text-sm font-medium text-white">ConfiguraÃ§Ãµes Gerais</label>
                 <label className="flex items-center justify-between p-3 bg-background-dark rounded-lg cursor-pointer">
                   <div className="flex items-center gap-3">
                     <Bell className="size-5 text-gray-400" />
                     <div>
-                      <p className="text-sm text-white">Habilitar Notificações</p>
-                      <p className="text-xs text-gray-500">Ativar ou desativar todas as notificações</p>
+                      <p className="text-sm text-white">Habilitar NotificaÃ§Ãµes</p>
+                      <p className="text-xs text-gray-500">Ativar ou desativar todas as notificaÃ§Ãµes</p>
                     </div>
                   </div>
                   <input
@@ -1525,14 +1451,14 @@ export default function Settings() {
               {/* Notification Types */}
               {notificationsEnabled && (
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-white">Tipos de Notificação</label>
+                  <label className="text-sm font-medium text-white">Tipos de NotificaÃ§Ã£o</label>
 
                   <label className="flex items-center justify-between p-3 bg-background-dark rounded-lg cursor-pointer">
                     <div className="flex items-center gap-3">
                       <AlertCircle className="size-5 text-red-400" />
                       <div>
                         <p className="text-sm text-white">Prazos Vencidos</p>
-                        <p className="text-xs text-gray-500">Notificar sobre prazos que já venceram</p>
+                        <p className="text-xs text-gray-500">Notificar sobre prazos que jÃ¡ venceram</p>
                       </div>
                     </div>
                     <input
@@ -1547,8 +1473,8 @@ export default function Settings() {
                     <div className="flex items-center gap-3">
                       <Clock className="size-5 text-amber-400" />
                       <div>
-                        <p className="text-sm text-white">Prazos Próximos</p>
-                        <p className="text-xs text-gray-500">Notificar sobre prazos que estão vencendo</p>
+                        <p className="text-sm text-white">Prazos PrÃ³ximos</p>
+                        <p className="text-xs text-gray-500">Notificar sobre prazos que estÃ£o vencendo</p>
                       </div>
                     </div>
                     <input
@@ -1564,7 +1490,7 @@ export default function Settings() {
               {/* Reminder Days */}
               {notificationsEnabled && notifyUpcoming && (
                 <div className="space-y-3">
-                  <label htmlFor="reminder-days" className="text-sm font-medium text-white">Antecedência do Lembrete</label>
+                  <label htmlFor="reminder-days" className="text-sm font-medium text-white">AntecedÃªncia do Lembrete</label>
                   <select
                     id="reminder-days"
                     name="reminderDays"
@@ -1579,7 +1505,7 @@ export default function Settings() {
                     <option value="7">1 semana antes</option>
                   </select>
                   <p className="text-xs text-gray-500">
-                    Quando você será notificado antes do vencimento do prazo
+                    Quando vocÃª serÃ¡ notificado antes do vencimento do prazo
                   </p>
                 </div>
               )}
@@ -1610,7 +1536,7 @@ export default function Settings() {
                   ) : (
                     <>
                       <Save className="size-4" />
-                      Salvar Configurações
+                      Salvar ConfiguraÃ§Ãµes
                     </>
                   )}
                 </button>
@@ -1633,7 +1559,7 @@ export default function Settings() {
                     Ambiente de Desenvolvimento
                   </div>
                   <p className="mt-1">
-                    Backup só funciona no ambiente Tauri. Execute com <code className="bg-yellow-500/20 px-1 rounded">npm run tauri dev</code>.
+                    Backup sÃ³ funciona no ambiente Tauri. Execute com <code className="bg-yellow-500/20 px-1 rounded">npm run tauri dev</code>.
                   </p>
                 </div>
               )}
@@ -1661,7 +1587,7 @@ export default function Settings() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-sm font-medium text-white flex items-center gap-2">
                       <HardDrive className="size-4" />
-                      Status de Persistência
+                      Status de PersistÃªncia
                     </label>
                     <span className="inline-flex items-center gap-1.5 rounded border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300">
                       <span className={cn('size-1.5 rounded-full bg-emerald-400', dbUpdatedNow && 'animate-pulse')} />
@@ -1673,7 +1599,7 @@ export default function Settings() {
                     {dbHealthLoading && (
                       <div className="flex items-center gap-2 text-sm text-gray-400">
                         <Loader2 className="size-4 animate-spin" />
-                        Verificando integridade e configuração...
+                        Verificando integridade e configuraÃ§Ã£o...
                       </div>
                     )}
 
@@ -1689,7 +1615,7 @@ export default function Settings() {
                             ) : (
                               <>
                                 <AlertCircle className="size-4 text-red-400" />
-                                <span className="text-red-400 font-medium">Atenção</span>
+                                <span className="text-red-400 font-medium">AtenÃ§Ã£o</span>
                               </>
                             )}
                             <span className="text-gray-500">
@@ -1736,7 +1662,7 @@ export default function Settings() {
 
                     {!dbHealthLoading && !dbHealth && (
                       <p className="text-sm text-gray-500">
-                        Status indisponível.
+                        Status indisponÃ­vel.
                       </p>
                     )}
                   </div>
@@ -1781,7 +1707,7 @@ export default function Settings() {
               <div className="space-y-3">
                 <label className="text-sm font-medium text-white">Exportar Dados (CSV)</label>
                 <p className="text-xs text-gray-500">
-                  Exportar tabelas individuais em formato CSV para análise em planilhas
+                  Exportar tabelas individuais em formato CSV para anÃ¡lise em planilhas
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -1840,7 +1766,7 @@ export default function Settings() {
                 <div className="space-y-3">
                   <label className="text-sm font-medium text-white flex items-center gap-2">
                     <HardDrive className="size-4" />
-                    Estatísticas do Banco
+                    EstatÃ­sticas do Banco
                   </label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <div className="p-3 bg-background-dark rounded-lg">
@@ -1897,10 +1823,10 @@ export default function Settings() {
               <div className="relative bg-surface-dark border border-border-dark rounded-lg w-full max-w-md mx-4 p-[var(--space-modal)] shadow-lg motion-overlay-panel">
                 <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
                   <AlertCircle className="size-5 text-amber-400" />
-                  Confirmar Importação
+                  Confirmar ImportaÃ§Ã£o
                 </h3>
                 <p className="text-gray-400 mb-4">
-                  <strong className="text-red-400">Atenção:</strong> Esta ação irá substituir <strong className="text-white">todos os dados existentes</strong> pelos dados do backup.
+                  <strong className="text-red-400">AtenÃ§Ã£o:</strong> Esta aÃ§Ã£o irÃ¡ substituir <strong className="text-white">todos os dados existentes</strong> pelos dados do backup.
                 </p>
                 {pendingImport && (
                   <div className="mb-4 p-3 bg-background-dark rounded-lg text-sm">
@@ -1908,7 +1834,7 @@ export default function Settings() {
                       Backup criado em: <span className="text-white">{new Date(pendingImport.created_at).toLocaleString('pt-BR')}</span>
                     </p>
                     <p className="text-gray-400">
-                      Versão: <span className="text-white">{pendingImport.version}</span>
+                      VersÃ£o: <span className="text-white">{pendingImport.version}</span>
                     </p>
                     <p className="text-gray-400">
                       Registros: <span className="text-white">
@@ -1942,3 +1868,5 @@ export default function Settings() {
     </div>
   )
 }
+
+

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { executeQuery, executeInsert, executeDelete, executeUpdate } from '@/lib/db'
 import { sendMessageAdvanced, type ClaudeRequestConfig, type GPT5RequestConfig, type GeminiRequestConfig, type WebSearchResult } from '@/lib/ai'
 import { classifyIntent, classifyIntentGPT5, classifyIntentGemini, type IntentProfile, type IntentConfig, type GPT5IntentConfig, type GeminiIntentConfig } from '@/lib/intentClassifier'
-import { logUsage, calculateCost, calculateCostGPT5, calculateCostGemini, type APIUsage, type GPT5Usage, type GeminiUsage } from '@/lib/costTracker'
+import { logUsage, logGPT5Usage, logGeminiUsage, calculateCost, calculateCostGPT5, calculateCostGemini, type APIUsage, type GPT5Usage, type GeminiUsage } from '@/lib/costTracker'
 import { getErrorMessage } from '@/lib/errorUtils'
 import type { AIProvider, ChatSession } from '@/types'
 
@@ -342,6 +342,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }))
     } catch (error) {
       set({ error: getErrorMessage(error), deletingSession: false })
+      throw error
     }
   },
 
@@ -510,10 +511,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }
       } else if (isGPT5 && response.gpt5_usage) {
         cost = calculateCostGPT5(response.gpt5_usage)
-        // TODO: Log GPT-5 usage to DB when table is updated
+        try {
+          await logGPT5Usage(activeSession.id, response.gpt5_usage)
+        } catch (err) {
+          console.error('Failed to log GPT-5 usage:', err)
+        }
       } else if (isGemini && response.gemini_usage) {
         cost = calculateCostGemini(response.gemini_usage)
-        // TODO: Log Gemini usage to DB when table is updated
+        try {
+          await logGeminiUsage(activeSession.id, response.gemini_usage)
+        } catch (err) {
+          console.error('Failed to log Gemini usage:', err)
+        }
       }
 
       // Save assistant message to DB (including provider-specific fields)

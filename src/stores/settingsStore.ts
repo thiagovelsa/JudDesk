@@ -1,6 +1,7 @@
-import { create } from 'zustand'
-import { executeQuery, executeInsert } from '@/lib/db'
+﻿import { create } from 'zustand'
+import { executeQuery, executeInsert, saveSettingsBatch, type SettingBatchEntry } from '@/lib/db'
 import { getErrorMessage } from '@/lib/errorUtils'
+import { isSensitiveKey, migrateLegacySensitiveSettings, setSecretForSettingKey } from '@/lib/secureSecrets'
 import type { AIProvider } from '@/types'
 
 interface SettingsStore {
@@ -14,6 +15,7 @@ interface SettingsStore {
   getSettingBoolean: (key: string, defaultValue?: boolean) => boolean
   getSettingNumber: (key: string, defaultValue?: number) => number
   setSetting: (key: string, value: string | null) => Promise<void>
+  setSettingsBatch: (entries: SettingBatchEntry[]) => Promise<void>
 
   // Convenience methods
   getClaudeApiKey: () => string | null
@@ -36,7 +38,6 @@ interface SettingsStore {
   getClaudeThinkingEnabled: () => boolean
   getClaudeWebSearchEnabled: () => boolean
   getClaudeCacheEnabled: () => boolean
-  getClaudeDailyLimitUsd: () => number
   getClaudeShowCosts: () => boolean
 }
 
@@ -44,6 +45,22 @@ const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
 const DEFAULT_PROVIDER: AIProvider = 'ollama'
 const DEFAULT_MODEL = 'llama3.1'
 let fetchSettingsInFlight: Promise<void> | null = null
+
+async function persistSensitiveSettingToKeychain(
+  key: string,
+  value: string | null
+): Promise<string | null> {
+  if (!isSensitiveKey(key)) {
+    return value
+  }
+
+  const trimmedValue = value?.trim() ?? ''
+  await setSecretForSettingKey(key, trimmedValue || null)
+
+  // Always clear persisted plaintext value in DB
+  await saveSettingsBatch([{ key, value: null }])
+  return trimmedValue || null
+}
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   settings: {},
@@ -67,6 +84,21 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         rows.forEach((row) => {
           settings[row.key] = row.value
         })
+
+        // Migrate legacy plaintext API keys from DB to keychain.
+        const { values: sensitiveValues, migratedKeys } = await migrateLegacySensitiveSettings(settings)
+        for (const key of Object.keys(sensitiveValues)) {
+          const sensitiveValue = sensitiveValues[key as keyof typeof sensitiveValues]
+          if (sensitiveValue) {
+            settings[key] = sensitiveValue
+          } else {
+            delete settings[key]
+          }
+        }
+
+        if (migratedKeys.length > 0) {
+          await saveSettingsBatch(migratedKeys.map((key) => ({ key, value: null })))
+        }
 
         set({ settings, loading: false })
       } catch (error) {
@@ -99,7 +131,15 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   setSetting: async (key: string, value: string | null) => {
     set({ saving: true, error: null })
     try {
-      // Use INSERT OR REPLACE for atomic operation (prevents race conditions)
+      if (isSensitiveKey(key)) {
+        const persistedValue = await persistSensitiveSettingToKeychain(key, value)
+        set((state) => ({
+          settings: { ...state.settings, [key]: persistedValue },
+          saving: false,
+        }))
+        return
+      }
+
       await executeInsert(
         'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
         [key, value]
@@ -107,6 +147,39 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
       set((state) => ({
         settings: { ...state.settings, [key]: value },
+        saving: false,
+      }))
+    } catch (error) {
+      set({ error: getErrorMessage(error), saving: false })
+      throw error
+    }
+  },
+
+  setSettingsBatch: async (entries: SettingBatchEntry[]) => {
+    if (entries.length === 0) return
+    set({ saving: true, error: null })
+
+    try {
+      const normalEntries: SettingBatchEntry[] = []
+      const resolvedValues: Record<string, string | null> = {}
+
+      for (const entry of entries) {
+        if (isSensitiveKey(entry.key)) {
+          const persistedValue = await persistSensitiveSettingToKeychain(entry.key, entry.value)
+          resolvedValues[entry.key] = persistedValue
+          continue
+        }
+
+        normalEntries.push(entry)
+        resolvedValues[entry.key] = entry.value
+      }
+
+      if (normalEntries.length > 0) {
+        await saveSettingsBatch(normalEntries)
+      }
+
+      set((state) => ({
+        settings: { ...state.settings, ...resolvedValues },
         saving: false,
       }))
     } catch (error) {
@@ -167,7 +240,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
   getClaudeCacheEnabled: () => get().getSettingBoolean('claude_cache_enabled', true),
 
-  getClaudeDailyLimitUsd: () => get().getSettingNumber('claude_daily_limit_usd', 5.0),
-
   getClaudeShowCosts: () => get().getSettingBoolean('claude_show_costs', true),
 }))
+

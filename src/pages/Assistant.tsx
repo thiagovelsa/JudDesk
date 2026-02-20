@@ -29,6 +29,7 @@ import {
   deleteChatAttachment,
   deleteChatAttachmentsBySession,
 } from '@/lib/db'
+import { isManagedAttachmentPath } from '@/lib/pathSecurity'
 import { useChatStore } from '@/stores/chatStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useDocumentStore } from '@/stores/documentStore'
@@ -490,10 +491,25 @@ export default function Assistant() {
       ? sessions.find((session) => session.id !== sessionId)
       : activeSession
 
+    let attachmentsToDelete: Awaited<ReturnType<typeof getChatAttachmentsBySession>> = []
     if (isTauri) {
-      await removeAttachmentFilesForSession(sessionId)
+      try {
+        attachmentsToDelete = await getChatAttachmentsBySession(sessionId)
+      } catch (error) {
+        console.error('Error reading session attachments before delete:', error)
+      }
     }
-    await deleteSession(sessionId)
+
+    try {
+      await deleteSession(sessionId)
+    } catch (error) {
+      console.error('Error deleting session:', error)
+      return
+    }
+
+    if (isTauri) {
+      await removeAttachmentFilesForSession(sessionId, attachmentsToDelete)
+    }
 
     if (!isTauri) return
 
@@ -549,16 +565,26 @@ export default function Assistant() {
   const removeAttachmentFile = async (filePath?: string | null) => {
     if (!filePath) return
     try {
-      const { remove } = await import('@tauri-apps/plugin-fs')
-      await remove(filePath)
+      const isManagedPath = await isManagedAttachmentPath(filePath)
+      if (!isManagedPath) {
+        console.warn('Refusing to remove attachment outside managed root:', filePath)
+        return
+      }
+      const { exists, remove } = await import('@tauri-apps/plugin-fs')
+      if (await exists(filePath)) {
+        await remove(filePath)
+      }
     } catch (error) {
       console.error('Error removing attachment file:', error)
     }
   }
 
-  const removeAttachmentFilesForSession = async (sessionId: number) => {
+  const removeAttachmentFilesForSession = async (
+    sessionId: number,
+    preloadedAttachments?: Awaited<ReturnType<typeof getChatAttachmentsBySession>>
+  ) => {
     try {
-      const attachments = await getChatAttachmentsBySession(sessionId)
+      const attachments = preloadedAttachments ?? await getChatAttachmentsBySession(sessionId)
       for (const attachment of attachments) {
         await removeAttachmentFile(attachment.file_path)
       }
@@ -762,9 +788,10 @@ export default function Assistant() {
   // Clear all uploaded files
   const handleClearUploadedFiles = async () => {
     if (isTauri && activeSession?.id) {
-      await removeAttachmentFilesForSession(activeSession.id)
       try {
+        const attachments = await getChatAttachmentsBySession(activeSession.id)
         await deleteChatAttachmentsBySession(activeSession.id)
+        await removeAttachmentFilesForSession(activeSession.id, attachments)
       } catch (error) {
         console.error('Error clearing chat attachments:', error)
       }
@@ -1876,4 +1903,3 @@ export default function Assistant() {
     </div>
   )
 }
-

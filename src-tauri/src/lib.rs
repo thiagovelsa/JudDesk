@@ -1,5 +1,30 @@
 use tauri::Manager;
 
+#[tauri::command]
+fn set_secret(service: String, key: String, value: String) -> Result<(), String> {
+    let entry = keyring::Entry::new(&service, &key).map_err(|err| err.to_string())?;
+    entry.set_password(&value).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn get_secret(service: String, key: String) -> Result<Option<String>, String> {
+    let entry = keyring::Entry::new(&service, &key).map_err(|err| err.to_string())?;
+    match entry.get_password() {
+        Ok(secret) => Ok(Some(secret)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+#[tauri::command]
+fn delete_secret(service: String, key: String) -> Result<(), String> {
+    let entry = keyring::Entry::new(&service, &key).map_err(|err| err.to_string())?;
+    match entry.delete_credential() {
+        Ok(_) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Set up panic hook for logging before abort
@@ -14,6 +39,11 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            set_secret,
+            get_secret,
+            delete_secret
+        ])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

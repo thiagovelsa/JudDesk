@@ -1,5 +1,7 @@
 import Database from '@tauri-apps/plugin-sql'
 import type { Client, Case, Document, Deadline, ChatSession, ChatMessage, ChatAttachment, Settings, DocumentFolder, ActivityLog, AIUsageLog } from '@/types'
+import { isSensitiveSettingKey } from './securityConstants'
+import { sanitizeImportedAttachmentPath, sanitizeImportedDocumentPath } from './pathSecurity'
 
 let db: Database | null = null
 let dbInitPromise: Promise<Database> | null = null
@@ -786,6 +788,33 @@ export async function executeDelete(query: string, params: unknown[] = []): Prom
   return result.rowsAffected
 }
 
+export interface SettingBatchEntry {
+  key: string
+  value: string | null
+}
+
+export async function saveSettingsBatch(entries: SettingBatchEntry[]): Promise<void> {
+  if (entries.length === 0) return
+
+  const database = await getDatabase()
+  await database.execute('SAVEPOINT settings_batch')
+
+  try {
+    for (const entry of entries) {
+      await database.execute(
+        'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+        [entry.key, entry.value]
+      )
+    }
+    await database.execute('RELEASE SAVEPOINT settings_batch')
+    emitDatabaseChanged('update')
+  } catch (error) {
+    await database.execute('ROLLBACK TO SAVEPOINT settings_batch')
+    await database.execute('RELEASE SAVEPOINT settings_batch')
+    throw error
+  }
+}
+
 // ============================================================================
 // Health / Diagnostics
 // ============================================================================
@@ -941,6 +970,10 @@ export async function exportDatabase(): Promise<DatabaseBackup> {
     database.select<AIUsageLog[]>('SELECT * FROM ai_usage_logs'),
   ])
 
+  const safeSettings = settings.filter(
+    (setting) => typeof setting.key === 'string' && !isSensitiveSettingKey(setting.key)
+  )
+
   return {
     version: '1.4',
     created_at: new Date().toISOString(),
@@ -951,7 +984,7 @@ export async function exportDatabase(): Promise<DatabaseBackup> {
     chat_sessions: chatSessions,
     chat_messages: chatMessages,
     chat_attachments: chatAttachments,
-    settings,
+    settings: safeSettings,
     document_folders: documentFolders,
     activity_logs: activityLogs,
     ai_usage_logs: aiUsageLogs,
@@ -1190,10 +1223,12 @@ export async function importDatabase(backup: DatabaseBackup): Promise<void> {
         resolvedFolderId = folderIdRemap.get(resolvedFolderId) ?? resolvedFolderId
       }
 
+      const sanitizedFilePath = await sanitizeImportedDocumentPath(doc.file_path)
+
       await database.execute(
         `INSERT INTO documents (id, case_id, client_id, name, file_path, extracted_text, folder_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [doc.id, doc.case_id, doc.client_id, doc.name, doc.file_path, doc.extracted_text, resolvedFolderId, doc.created_at, doc.updated_at ?? doc.created_at]
+        [doc.id, doc.case_id, doc.client_id, doc.name, sanitizedFilePath, doc.extracted_text, resolvedFolderId, doc.created_at, doc.updated_at ?? doc.created_at]
       )
     }
 
@@ -1227,6 +1262,7 @@ export async function importDatabase(backup: DatabaseBackup): Promise<void> {
     // Insert chat attachments
     if (backup.chat_attachments) {
       for (const attachment of backup.chat_attachments as Record<string, unknown>[]) {
+        const sanitizedFilePath = await sanitizeImportedAttachmentPath(attachment.file_path)
         await database.execute(
           `INSERT INTO chat_attachments (id, session_id, name, file_path, file_type, extracted_text, size_bytes, error, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1234,7 +1270,7 @@ export async function importDatabase(backup: DatabaseBackup): Promise<void> {
             attachment.id,
             attachment.session_id,
             attachment.name,
-            attachment.file_path ?? null,
+            sanitizedFilePath,
             attachment.file_type,
             attachment.extracted_text ?? null,
             attachment.size_bytes ?? 0,
@@ -1247,9 +1283,13 @@ export async function importDatabase(backup: DatabaseBackup): Promise<void> {
 
     // Insert settings
     for (const setting of backup.settings as Record<string, unknown>[]) {
+      const key = typeof setting.key === 'string' ? setting.key : ''
+      if (!key || isSensitiveSettingKey(key)) {
+        continue
+      }
       await database.execute(
         `INSERT INTO settings (key, value) VALUES (?, ?)`,
-        [setting.key, setting.value]
+        [key, typeof setting.value === 'string' || setting.value === null ? setting.value : String(setting.value)]
       )
     }
 
@@ -1273,6 +1313,18 @@ export async function importDatabase(backup: DatabaseBackup): Promise<void> {
           [log.id, log.session_id, log.input_tokens, log.output_tokens, log.thinking_tokens, log.cache_read_tokens, log.cache_write_tokens, log.cost_usd, log.created_at]
         )
       }
+    }
+
+    // Rebuild FTS index to avoid stale IDs after full import
+    try {
+      await database.execute('DELETE FROM documents_fts')
+      await database.execute(`
+        INSERT INTO documents_fts(document_id, name, extracted_text)
+        SELECT id, name, COALESCE(extracted_text, '')
+        FROM documents
+      `)
+    } catch (error) {
+      console.debug('[DB] Skipped FTS rebuild after import:', error)
     }
 
     // Re-enable foreign keys and verify integrity

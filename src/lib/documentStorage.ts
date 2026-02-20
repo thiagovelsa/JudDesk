@@ -1,4 +1,5 @@
 import { isTauriEnvironment } from './db'
+import { isManagedDocumentPath } from './pathSecurity'
 
 const DOCUMENTS_ROOT_DIR = 'documents'
 
@@ -78,6 +79,11 @@ export async function removeStoredDocumentFile(filePath?: string | null): Promis
   if (!isTauriEnvironment() || !filePath) return
 
   try {
+    const isManagedPath = await isManagedDocumentPath(filePath)
+    if (!isManagedPath) {
+      console.warn('[DocumentStorage] Refusing to remove file outside managed documents root:', filePath)
+      return
+    }
     const { exists, remove } = await import('@tauri-apps/plugin-fs')
     if (await exists(filePath)) {
       await remove(filePath)

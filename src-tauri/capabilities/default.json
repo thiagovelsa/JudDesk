@@ -27,7 +27,7 @@
     "fs:allow-appdata-meta-recursive",
     {
       "identifier": "fs:scope",
-      "allow": ["$APPDATA", "$APPDATA/**", "$DESKTOP", "$DOWNLOAD"]
+      "allow": ["$APPDATA", "$APPDATA/**"]
     },
     "dialog:default",
     "dialog:allow-open",

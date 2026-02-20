@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+﻿import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   HardDrive,
   FolderOpen,
@@ -18,6 +18,7 @@ import {
   setMaxBackups,
   getBackupList,
   executeBackup,
+  setBackupSessionPassword,
   deleteBackup,
   restoreFromBackup,
   getLastBackupTime,
@@ -43,6 +44,31 @@ export function BackupSettings({ onRestore }: BackupSettingsProps) {
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showMessage = (type: 'success' | 'error', text: string) => {
+    setMessage({ type, text })
+    setTimeout(() => setMessage(null), 3000)
+  }
+
+  const requestBackupPassword = (mode: 'backup' | 'restore' | 'auto'): string | null => {
+    const promptLabel =
+      mode === 'restore'
+        ? 'Digite a senha do backup para restaurar:'
+        : mode === 'auto'
+          ? 'Defina a senha para backups automÃ¡ticos desta sessÃ£o:'
+          : 'Digite uma senha para criptografar este backup:'
+
+    const password = window.prompt(promptLabel)
+    if (password === null) return null
+
+    const trimmed = password.trim()
+    if (trimmed.length < 8) {
+      showMessage('error', 'Use uma senha com pelo menos 8 caracteres')
+      return null
+    }
+
+    return trimmed
+  }
 
   const loadSettings = useCallback(async () => {
     setLoading(true)
@@ -91,11 +117,15 @@ export function BackupSettings({ onRestore }: BackupSettingsProps) {
 
   const handleToggleEnabled = async () => {
     const newValue = !enabled
+    if (newValue) {
+      const password = requestBackupPassword('auto')
+      if (!password) return
+      setBackupSessionPassword(password)
+    }
     setEnabled(newValue)
     await setBackupEnabled(newValue)
     showMessage('success', newValue ? 'Backup automático ativado' : 'Backup automático desativado')
   }
-
   const handleSelectFolder = async () => {
     try {
       const { open } = await import('@tauri-apps/plugin-dialog')
@@ -119,7 +149,7 @@ export function BackupSettings({ onRestore }: BackupSettingsProps) {
   const handleUseDefaultPath = async () => {
     setBackupPathState(null)
     await setBackupPath(null)
-    showMessage('success', 'Usando pasta padrão do sistema')
+    showMessage('success', 'Usando pasta padrÃ£o do sistema')
     await loadSettings()
   }
 
@@ -129,9 +159,13 @@ export function BackupSettings({ onRestore }: BackupSettingsProps) {
   }
 
   const handleBackupNow = async () => {
+    const password = requestBackupPassword('backup')
+    if (!password) return
+
     setBackupInProgress(true)
     try {
-      const result = await executeBackup()
+      setBackupSessionPassword(password)
+      const result = await executeBackup(password)
       if (result) {
         showMessage('success', `Backup criado: ${result.filename}`)
         await loadSettings()
@@ -144,11 +178,10 @@ export function BackupSettings({ onRestore }: BackupSettingsProps) {
       setBackupInProgress(false)
     }
   }
-
   const handleDeleteBackup = async (filename: string) => {
     try {
       await deleteBackup(filename)
-      showMessage('success', 'Backup excluído')
+      showMessage('success', 'Backup excluÃ­do')
       await loadSettings()
     } catch (error) {
       showMessage('error', 'Falha ao excluir backup')
@@ -158,11 +191,15 @@ export function BackupSettings({ onRestore }: BackupSettingsProps) {
   const handleRestoreBackup = async () => {
     if (!selectedBackup) return
 
+    const password = requestBackupPassword('restore')
+    if (!password) return
+
     setRestoreInProgress(true)
     setShowRestoreConfirm(false)
 
     try {
-      await restoreFromBackup(selectedBackup)
+      setBackupSessionPassword(password)
+      await restoreFromBackup(selectedBackup, password)
       showMessage('success', 'Backup restaurado com sucesso! Recarregando dados...')
       onRestore?.()
     } catch (error) {
@@ -172,12 +209,6 @@ export function BackupSettings({ onRestore }: BackupSettingsProps) {
       setSelectedBackup(null)
     }
   }
-
-  const showMessage = (type: 'success' | 'error', text: string) => {
-    setMessage({ type, text })
-    setTimeout(() => setMessage(null), 3000)
-  }
-
   const formatDate = (dateStr: string) => {
     try {
       return new Date(dateStr).toLocaleString('pt-BR')
@@ -268,7 +299,7 @@ export function BackupSettings({ onRestore }: BackupSettingsProps) {
           </button>
         )}
         <p className="text-xs text-zinc-500">
-          Dica: Escolha uma pasta do OneDrive, Google Drive ou Dropbox para backup em nuvem
+          Dica: Backups são criptografados com senha. Você pode sincronizar esta pasta com OneDrive, Google Drive ou Dropbox.
         </p>
       </div>
 
@@ -349,7 +380,7 @@ export function BackupSettings({ onRestore }: BackupSettingsProps) {
                     {backup.filename}
                   </p>
                   <p className="text-xs text-zinc-500">
-                    {formatDate(backup.createdAt)} • {formatFileSize(backup.size)}
+                    {formatDate(backup.createdAt)} â€¢ {formatFileSize(backup.size)}
                   </p>
                 </div>
                 <button
@@ -416,3 +447,7 @@ export function BackupSettings({ onRestore }: BackupSettingsProps) {
     </div>
   )
 }
+
+
+
+

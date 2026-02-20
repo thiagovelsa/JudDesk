@@ -1,4 +1,5 @@
 import { useState, useEffect, memo, useCallback, useMemo, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Plus, Search, MoreHorizontal, Phone, Mail, FileText, Pencil, Trash2, Loader2, Briefcase, X, ChevronRight, Upload, AlertCircle } from 'lucide-react'
 import { FixedSizeGrid as Grid } from 'react-window'
 import AutoSizer from 'react-virtualized-auto-sizer'
@@ -153,6 +154,7 @@ const ClientCard = memo(function ClientCard({
 })
 
 export default function Clients() {
+  const location = useLocation()
   const [search, setSearch] = useState('')
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -175,8 +177,8 @@ export default function Clients() {
   const CARD_GAP = uiDensity === 'compact' ? 12 : 16
 
   const { clients, loading, error, fetchClients, createClient, updateClient, deleteClient, searchClients } = useClientStore()
-  const { cases, createCase, updateCase, deleteCase } = useCaseStore()
-  const { documents, createDocument, deleteDocument } = useDocumentStore()
+  const { cases, fetchCases, createCase, updateCase, deleteCase } = useCaseStore()
+  const { documents, fetchDocuments, createDocument, deleteDocument } = useDocumentStore()
 
   // Compute cases for selected client from reactive state
   const clientCases = useMemo(() =>
@@ -203,6 +205,19 @@ export default function Clients() {
     fetchClients()
   }, [fetchClients])
 
+  useEffect(() => {
+    if (cases.length === 0) {
+      fetchCases().catch((error) => {
+        console.error('Failed to load cases:', error)
+      })
+    }
+    if (documents.length === 0) {
+      fetchDocuments().catch((error) => {
+        console.error('Failed to load documents:', error)
+      })
+    }
+  }, [cases.length, documents.length, fetchCases, fetchDocuments])
+
   // Use refs to avoid triggering useEffect on function identity changes
   const searchClientsRef = useRef(searchClients)
   const fetchClientsRef = useRef(fetchClients)
@@ -220,6 +235,38 @@ export default function Clients() {
 
     return () => clearTimeout(delaySearch)
   }, [search])
+
+  useEffect(() => {
+    if (!location.search || clients.length === 0) return
+
+    const params = new URLSearchParams(location.search)
+    const clientIdParam = params.get('id')
+    const caseIdParam = params.get('caseId')
+
+    if (clientIdParam) {
+      const clientId = Number(clientIdParam)
+      if (Number.isFinite(clientId)) {
+        const targetClient = clients.find((client) => client.id === clientId)
+        if (targetClient) {
+          setSelectedClient(targetClient)
+          return
+        }
+      }
+    }
+
+    if (caseIdParam && cases.length > 0) {
+      const caseId = Number(caseIdParam)
+      if (Number.isFinite(caseId)) {
+        const targetCase = cases.find((item) => item.id === caseId)
+        if (targetCase) {
+          const targetClient = clients.find((client) => client.id === targetCase.client_id)
+          if (targetClient) {
+            setSelectedClient(targetClient)
+          }
+        }
+      }
+    }
+  }, [location.search, clients, cases])
 
   const handleCreateClient = async (data: {
     name: string

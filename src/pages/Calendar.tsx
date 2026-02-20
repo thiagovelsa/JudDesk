@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Plus, Calendar as CalendarIcon, Check, AlertTriangle, Clock, Loader2, Pencil, Trash2, LayoutGrid, List, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDeadlineStore } from '@/stores/deadlineStore'
@@ -12,6 +13,7 @@ type ViewType = 'calendar' | 'list'
 type FilterType = 'todos' | 'pendentes' | 'concluidos' | 'vencidos'
 
 export default function Calendar() {
+  const location = useLocation()
   const [view, setView] = useState<ViewType>('calendar')
   const [filter, setFilter] = useState<FilterType>('pendentes')
   const [showForm, setShowForm] = useState(false)
@@ -25,6 +27,22 @@ export default function Calendar() {
   useEffect(() => {
     fetchDeadlines()
   }, [fetchDeadlines])
+
+  useEffect(() => {
+    if (!location.search || deadlines.length === 0) return
+
+    const params = new URLSearchParams(location.search)
+    const deadlineIdParam = params.get('id')
+    if (!deadlineIdParam) return
+
+    const deadlineId = Number(deadlineIdParam)
+    if (!Number.isFinite(deadlineId)) return
+
+    const targetDeadline = deadlines.find((deadline) => deadline.id === deadlineId)
+    if (targetDeadline) {
+      setViewingDeadline(targetDeadline)
+    }
+  }, [location.search, deadlines])
 
   // Compute overdue deadlines from reactive state
   const overdueDeadlines = useMemo(() => {

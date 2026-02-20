@@ -22,6 +22,7 @@ Sistema desktop para escritorio de advocacia com banco de dados local, gestao de
   - [Estado Reativo](#estado-reativo-zustand)
   - [Otimizacoes de Performance](#otimizacoes-de-performance)
 - [Stack Tecnologica](#stack-tecnologica)
+- [Atualizacoes Recentes](#atualizacoes-recentes)
 - [Requisitos](#requisitos)
 - [Instalacao](#instalacao)
 - [Estrutura do Projeto](#estrutura-do-projeto)
@@ -86,6 +87,8 @@ Sistema desktop para escritorio de advocacia com banco de dados local, gestao de
 - Busca unificada em clientes, casos, documentos e prazos
 - Atalho de teclado (Ctrl+K)
 - Navegacao por teclado nos resultados
+- Limiar minimo de 2 caracteres para reduzir consultas pesadas sem ganho
+- Navegacao por resultado com deep-link para entidade (`/clients?id=...`, `/documents?id=...`, `/calendar?id=...`)
 
 ### Historico de Atividades
 - Log automatico de todas as operacoes CRUD
@@ -123,11 +126,13 @@ Sistema desktop para escritorio de advocacia com banco de dados local, gestao de
 Revisao de seguranca implementada (fevereiro/2026):
 
 - **CSP restritivo**: Content Security Policy sem 'unsafe-inline' previne injecao de CSS
+- **CSP local para IA**: `connect-src` permite `localhost/127.0.0.1` em portas dinamicas para Ollama configuravel
 - **Path validation**: Caminhos de backup sao validados contra path traversal (apenas AppData/Desktop/Download permitidos)
 - **Panic handling**: Hook de panic em Rust para logging antes de encerrar
 - **Race condition fix**: Criacao de pastas de cliente com lock atomico
 - **JSON validation**: Parse de web search results com validacao de schema
 - **Desacoplamento**: Callback pattern entre stores para evitar dependencias circulares
+- **Least privilege no Tauri**: plugin/permissao `shell` removidos por nao serem necessarios
 
 ### Acessibilidade
 
@@ -149,6 +154,21 @@ Revisao de seguranca implementada (fevereiro/2026):
 - **Queries otimizadas**: Contagem de casos usa query unica ao inves de N+1
 - **Memoizacao**: Filtros e listas derivadas usam useMemo/useCallback
 - **Cleanup de recursos**: PDFs sao destruidos ao desmontar componente
+- **Deduplicacao de fetch inicial**: stores ignoram requests paralelos duplicados (`fetch* in-flight`)
+- **Busca robusta**: protecao contra respostas stale no Search (race condition entre digitacoes)
+- **Indices SQLite adicionais**: aceleracao para consultas frequentes de clientes/casos/documentos/prazos
+
+## Atualizacoes Recentes
+
+### 20/02/2026 - Hardening tecnico, desempenho e alinhamento FE/BE
+
+- **Ollama configuravel ponta a ponta**: URL salva em `settings.ollama_url` passou a ser usada na verificacao de conexao, listagem de modelos e envio de mensagens.
+- **Seguranca Tauri**: remocao do plugin `tauri-plugin-shell` e da permissao `shell:allow-open`.
+- **CSP ajustada**: suporte a portas locais dinamicas (`localhost:*` e `127.0.0.1:*`) para execucoes de Ollama fora da porta padrao.
+- **Datas locais consistentes**: pontos criticos (notificacoes/filtros/historico) migrados para chave de data local (`YYYY-MM-DD`) sem dependencia de UTC.
+- **Busca global mais estavel**: limite minimo de consulta e protecao contra resultados fora de ordem durante digitacao rapida.
+- **Persistencia/indices**: limpeza de FTS ao deletar documento e novos indices para consultas frequentes.
+- **Navegacao por resultados**: paginas de Clientes/Documentos/Agenda consomem query params para abrir item diretamente.
 
 ## Stack Tecnologica
 
@@ -307,6 +327,10 @@ ollama pull llama3.1
 # O JurisDesk detecta automaticamente modelos disponiveis
 ```
 
+Observacoes:
+- A URL do Ollama e configuravel em **Settings > Inteligencia Artificial** (`ollama_url`).
+- A URL configurada e respeitada tanto no teste de conexao quanto no runtime do Assistente.
+
 ### Claude API
 
 1. Obter API key em [console.anthropic.com](https://console.anthropic.com)
@@ -381,6 +405,7 @@ npm run test:coverage
 ```
 
 Nota: `npm test`/`npm run test:*` requer Node.js 20+.
+O `package.json` declara `engines.node: >=20.0.0`.
 
 ## Scripts Disponiveis
 

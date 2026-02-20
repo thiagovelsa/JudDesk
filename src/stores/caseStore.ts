@@ -6,6 +6,8 @@ import { getErrorMessage } from '@/lib/errorUtils'
 import { cleanupAfterCaseDelete } from './cascadeCleanup'
 import type { Case } from '@/types'
 
+let fetchCasesInFlight: { key: string; promise: Promise<void> } | null = null
+
 interface CaseInput {
   client_id: number
   title: string
@@ -37,23 +39,37 @@ export const useCaseStore = create<CaseStore>((set, get) => ({
   error: null,
 
   fetchCases: async (clientId?: number) => {
-    set({ loading: true, error: null })
-    try {
-      let query = 'SELECT * FROM cases'
-      const params: unknown[] = []
-
-      if (clientId !== undefined) {
-        query += ' WHERE client_id = ?'
-        params.push(clientId)
-      }
-
-      query += ' ORDER BY created_at DESC'
-
-      const cases = await executeQuery<Case>(query, params)
-      set({ cases, loading: false })
-    } catch (error) {
-      set({ error: getErrorMessage(error), loading: false })
+    const requestKey = clientId === undefined ? 'all' : `client:${clientId}`
+    if (fetchCasesInFlight?.key === requestKey) {
+      return fetchCasesInFlight.promise
     }
+
+    const promise = (async () => {
+      set({ loading: true, error: null })
+      try {
+        let query = 'SELECT * FROM cases'
+        const params: unknown[] = []
+
+        if (clientId !== undefined) {
+          query += ' WHERE client_id = ?'
+          params.push(clientId)
+        }
+
+        query += ' ORDER BY created_at DESC'
+
+        const cases = await executeQuery<Case>(query, params)
+        set({ cases, loading: false })
+      } catch (error) {
+        set({ error: getErrorMessage(error), loading: false })
+      } finally {
+        if (fetchCasesInFlight?.key === requestKey) {
+          fetchCasesInFlight = null
+        }
+      }
+    })()
+
+    fetchCasesInFlight = { key: requestKey, promise }
+    return promise
   },
 
   getCase: async (id: number) => {

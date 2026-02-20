@@ -3,7 +3,10 @@ import { executeQuery, executeInsert, executeUpdate, executeDelete } from '@/lib
 import { logActivity } from '@/lib/activityLogger'
 import { triggerBackup } from '@/lib/autoBackup'
 import { getErrorMessage } from '@/lib/errorUtils'
+import { toLocalDateKey } from '@/lib/utils'
 import type { Deadline } from '@/types'
+
+let fetchDeadlinesInFlight: Promise<void> | null = null
 
 /**
  * Safely converts SQLite boolean (INTEGER 0/1) to JavaScript boolean.
@@ -49,21 +52,31 @@ export const useDeadlineStore = create<DeadlineStore>((set, get) => ({
   error: null,
 
   fetchDeadlines: async () => {
-    set({ loading: true, error: null })
-    try {
-      const deadlines = await executeQuery<Deadline>(
-        'SELECT * FROM deadlines ORDER BY due_date ASC',
-        []
-      )
-      // Convert completed field from number to boolean
-      const normalized = deadlines.map((d) => ({
-        ...d,
-        completed: toBool(d.completed),
-      }))
-      set({ deadlines: normalized, loading: false })
-    } catch (error) {
-      set({ error: getErrorMessage(error), loading: false })
+    if (fetchDeadlinesInFlight) {
+      return fetchDeadlinesInFlight
     }
+
+    fetchDeadlinesInFlight = (async () => {
+      set({ loading: true, error: null })
+      try {
+        const deadlines = await executeQuery<Deadline>(
+          'SELECT * FROM deadlines ORDER BY due_date ASC',
+          []
+        )
+        // Convert completed field from number to boolean
+        const normalized = deadlines.map((d) => ({
+          ...d,
+          completed: toBool(d.completed),
+        }))
+        set({ deadlines: normalized, loading: false })
+      } catch (error) {
+        set({ error: getErrorMessage(error), loading: false })
+      } finally {
+        fetchDeadlinesInFlight = null
+      }
+    })()
+
+    return fetchDeadlinesInFlight
   },
 
   getDeadline: async (id: number) => {
@@ -242,8 +255,8 @@ export const useDeadlineStore = create<DeadlineStore>((set, get) => ({
       const futureDate = new Date(today)
       futureDate.setDate(today.getDate() + days)
 
-      const todayStr = today.toISOString().split('T')[0]
-      const futureDateStr = futureDate.toISOString().split('T')[0]
+      const todayStr = toLocalDateKey(today)
+      const futureDateStr = toLocalDateKey(futureDate)
 
       const deadlines = await executeQuery<Deadline>(
         `SELECT * FROM deadlines
@@ -263,7 +276,7 @@ export const useDeadlineStore = create<DeadlineStore>((set, get) => ({
 
   getOverdueDeadlines: async () => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = toLocalDateKey(new Date())
 
       const deadlines = await executeQuery<Deadline>(
         `SELECT * FROM deadlines

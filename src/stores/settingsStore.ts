@@ -43,6 +43,7 @@ interface SettingsStore {
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
 const DEFAULT_PROVIDER: AIProvider = 'ollama'
 const DEFAULT_MODEL = 'llama3.1'
+let fetchSettingsInFlight: Promise<void> | null = null
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   settings: {},
@@ -51,21 +52,31 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   error: null,
 
   fetchSettings: async () => {
-    set({ loading: true, error: null })
-    try {
-      const rows = await executeQuery<{ key: string; value: string | null }>(
-        'SELECT key, value FROM settings'
-      )
-
-      const settings: Record<string, string | null> = {}
-      rows.forEach((row) => {
-        settings[row.key] = row.value
-      })
-
-      set({ settings, loading: false })
-    } catch (error) {
-      set({ error: getErrorMessage(error), loading: false })
+    if (fetchSettingsInFlight) {
+      return fetchSettingsInFlight
     }
+
+    fetchSettingsInFlight = (async () => {
+      set({ loading: true, error: null })
+      try {
+        const rows = await executeQuery<{ key: string; value: string | null }>(
+          'SELECT key, value FROM settings'
+        )
+
+        const settings: Record<string, string | null> = {}
+        rows.forEach((row) => {
+          settings[row.key] = row.value
+        })
+
+        set({ settings, loading: false })
+      } catch (error) {
+        set({ error: getErrorMessage(error), loading: false })
+      } finally {
+        fetchSettingsInFlight = null
+      }
+    })()
+
+    return fetchSettingsInFlight
   },
 
   getSetting: (key: string) => {

@@ -1,6 +1,7 @@
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification'
 import type { Deadline } from '@/types'
 import { isTauriEnvironment } from './db'
+import { toLocalDateKey } from './utils'
 
 // Track notified deadline IDs to prevent duplicates (resets daily)
 const notifiedDeadlineIds = new Set<number>()
@@ -77,7 +78,7 @@ export async function checkAndNotifyUpcomingDeadlines(deadlines: Deadline[]): Pr
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const todayStr = today.toISOString().split('T')[0]
+  const todayStr = toLocalDateKey(today)
 
   // Reset notified set if day changed
   if (lastNotificationDate !== todayStr) {

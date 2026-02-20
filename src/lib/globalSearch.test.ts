@@ -34,6 +34,13 @@ describe('globalSearch', () => {
       expect(mockExecuteQuery).not.toHaveBeenCalled()
     })
 
+    it('should return empty array for single-character query', async () => {
+      const result = await globalSearch('a')
+
+      expect(result).toEqual([])
+      expect(mockExecuteQuery).not.toHaveBeenCalled()
+    })
+
     it('should search clients', async () => {
       mockExecuteQuery
         .mockResolvedValueOnce([{ id: 1, name: 'John Doe', cpf_cnpj: '123.456.789-00', email: null }])

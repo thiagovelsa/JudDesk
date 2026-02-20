@@ -454,11 +454,16 @@ async function migrateDocumentsUpdatedAt() {
 async function createPerformanceIndexes() {
   if (!db) return
 
+  // Clients indexes
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_clients_created_at ON clients(created_at)')
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_clients_updated_at ON clients(updated_at)')
+
   // Cases indexes
   await db.execute('CREATE INDEX IF NOT EXISTS idx_cases_client_id ON cases(client_id)')
   await db.execute('CREATE INDEX IF NOT EXISTS idx_cases_created_at ON cases(created_at)')
   await db.execute('CREATE INDEX IF NOT EXISTS idx_cases_updated_at ON cases(updated_at)')
   await db.execute('CREATE INDEX IF NOT EXISTS idx_cases_status ON cases(status)')
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_cases_client_id_created_at ON cases(client_id, created_at)')
 
   // Documents indexes
   await db.execute('CREATE INDEX IF NOT EXISTS idx_documents_client_id ON documents(client_id)')
@@ -466,12 +471,15 @@ async function createPerformanceIndexes() {
   await db.execute('CREATE INDEX IF NOT EXISTS idx_documents_folder_id ON documents(folder_id)')
   await db.execute('CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at)')
   await db.execute('CREATE INDEX IF NOT EXISTS idx_documents_updated_at ON documents(updated_at)')
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_documents_client_id_created_at ON documents(client_id, created_at)')
 
   // Deadlines indexes
   await db.execute('CREATE INDEX IF NOT EXISTS idx_deadlines_due_date ON deadlines(due_date)')
   await db.execute('CREATE INDEX IF NOT EXISTS idx_deadlines_completed_due_date ON deadlines(completed, due_date)')
   await db.execute('CREATE INDEX IF NOT EXISTS idx_deadlines_case_id ON deadlines(case_id)')
   await db.execute('CREATE INDEX IF NOT EXISTS idx_deadlines_client_id ON deadlines(client_id)')
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_deadlines_case_id_due_date ON deadlines(case_id, due_date)')
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_deadlines_client_id_due_date ON deadlines(client_id, due_date)')
 
   // Chat messages indexes
   await db.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)')
@@ -565,6 +573,24 @@ export async function updateDocumentFTS(
   } catch (error) {
     // Silently fail if FTS is not available
     console.debug('[DB] FTS update skipped:', error)
+  }
+}
+
+/**
+ * Removes a document from the FTS index.
+ * Best-effort: silently skips if FTS is unavailable.
+ */
+export async function removeDocumentFTS(documentId: number): Promise<void> {
+  if (!isTauriEnvironment()) return
+
+  try {
+    const database = await getDatabase()
+    await database.execute(
+      'DELETE FROM documents_fts WHERE document_id = ?',
+      [documentId]
+    )
+  } catch (error) {
+    console.debug('[DB] FTS delete skipped:', error)
   }
 }
 

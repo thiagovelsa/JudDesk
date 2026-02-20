@@ -5,6 +5,11 @@ const env = { ...process.env };
 const nodeDir = path.dirname(process.execPath);
 
 if (process.platform === "win32") {
+  const userProfile =
+    env.USERPROFILE ||
+    `${env.HOMEDRIVE || "C:"}${env.HOMEPATH || "\\Users\\User"}`;
+  const cargoBinDir = path.join(userProfile, ".cargo", "bin");
+
   const requiredPathEntries = [
     nodeDir,
     "C:\\Windows\\System32",
@@ -12,7 +17,7 @@ if (process.platform === "win32") {
     "C:\\Windows\\System32\\Wbem",
     "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\",
     "C:\\Windows\\System32\\OpenSSH\\",
-    "C:\\Users\\User\\.cargo\\bin",
+    cargoBinDir,
   ];
 
   const currentPath = env.PATH || "";
@@ -22,8 +27,8 @@ if (process.platform === "win32") {
     .join(";");
 
   env.PATH = mergedPath;
-  env.CARGO = env.CARGO || "C:\\Users\\User\\.cargo\\bin\\cargo.exe";
-  env.RUSTC = env.RUSTC || "C:\\Users\\User\\.cargo\\bin\\rustc.exe";
+  env.CARGO = env.CARGO || path.join(cargoBinDir, "cargo.exe");
+  env.RUSTC = env.RUSTC || path.join(cargoBinDir, "rustc.exe");
 }
 
 const tauriEntrypoint = require.resolve("@tauri-apps/cli/tauri.js");

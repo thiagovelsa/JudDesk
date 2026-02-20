@@ -8,6 +8,8 @@
 import { executeQuery, isTauriEnvironment, searchDocumentsFast } from './db'
 import type { SearchResult, EntityType } from '@/types'
 
+const MIN_SEARCH_QUERY_LENGTH = 2
+
 interface ClientRow {
   id: number
   name: string
@@ -45,16 +47,17 @@ export async function globalSearch(
   query: string,
   limit: number = 5
 ): Promise<SearchResult[]> {
-  if (!isTauriEnvironment() || !query.trim()) return []
+  const normalizedQuery = query.trim()
+  if (!isTauriEnvironment() || normalizedQuery.length < MIN_SEARCH_QUERY_LENGTH) return []
 
-  const searchTerm = `%${query.trim()}%`
+  const searchTerm = `%${normalizedQuery}%`
 
   try {
     // Search all entity types in parallel
     const [clients, cases, documents, deadlines] = await Promise.all([
       searchClients(searchTerm, limit),
       searchCases(searchTerm, limit),
-      searchDocuments(searchTerm, limit),
+      searchDocuments(normalizedQuery, searchTerm, limit),
       searchDeadlines(searchTerm, limit),
     ])
 
@@ -98,10 +101,13 @@ async function searchCases(searchTerm: string, limit: number): Promise<SearchRes
   }))
 }
 
-async function searchDocuments(searchTerm: string, limit: number): Promise<SearchResult[]> {
+async function searchDocuments(
+  normalizedQuery: string,
+  searchTerm: string,
+  limit: number
+): Promise<SearchResult[]> {
   // Try FTS-accelerated search first
-  const searchQuery = searchTerm.replace(/%/g, '')
-  const candidateIds = await searchDocumentsFast(searchQuery)
+  const candidateIds = await searchDocumentsFast(normalizedQuery)
 
   let rows: DocumentRow[]
 

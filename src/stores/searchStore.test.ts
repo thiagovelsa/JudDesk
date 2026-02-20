@@ -112,6 +112,34 @@ describe('searchStore', () => {
       expect(consoleSpy).toHaveBeenCalled()
       consoleSpy.mockRestore()
     })
+
+    it('should ignore stale search responses when a newer search finishes first', async () => {
+      let resolveFirst: ((value: unknown) => void) | null = null
+      let resolveSecond: ((value: unknown) => void) | null = null
+
+      const firstResults = [{ type: 'client' as const, id: 1, title: 'First', subtitle: '' }]
+      const secondResults = [{ type: 'client' as const, id: 2, title: 'Second', subtitle: '' }]
+
+      mockGlobalSearch
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve }))
+
+      useSearchStore.setState({ query: 'first' })
+      const firstSearch = useSearchStore.getState().search()
+
+      useSearchStore.setState({ query: 'second' })
+      const secondSearch = useSearchStore.getState().search()
+
+      resolveSecond?.(secondResults)
+      await secondSearch
+      resolveFirst?.(firstResults)
+      await firstSearch
+
+      const state = useSearchStore.getState()
+      expect(state.results).toEqual(secondResults)
+      expect(state.selectedIndex).toBe(0)
+      expect(state.loading).toBe(false)
+    })
   })
 
   describe('clear', () => {

@@ -5,6 +5,8 @@ import { getErrorMessage } from '@/lib/errorUtils'
 import { useDocumentStore } from './documentStore'
 import type { DocumentFolder } from '@/types'
 
+let fetchFoldersInFlight: { key: string; promise: Promise<void> } | null = null
+
 interface FolderStore {
   folders: DocumentFolder[]
   selectedFolderId: number | null
@@ -93,23 +95,37 @@ export const useFolderStore = create<FolderStore>((set, get) => ({
   error: null,
 
   fetchFolders: async (caseId?: number) => {
-    set({ loading: true, error: null })
-    try {
-      let query = 'SELECT * FROM document_folders'
-      const params: unknown[] = []
-
-      if (caseId !== undefined) {
-        query += ' WHERE case_id = ? OR case_id IS NULL'
-        params.push(caseId)
-      }
-
-      query += ' ORDER BY position ASC, name ASC'
-
-      const folders = await executeQuery<DocumentFolder>(query, params)
-      set({ folders, loading: false })
-    } catch (error) {
-      set({ error: getErrorMessage(error), loading: false })
+    const requestKey = caseId === undefined ? 'all' : `case:${caseId}`
+    if (fetchFoldersInFlight?.key === requestKey) {
+      return fetchFoldersInFlight.promise
     }
+
+    const promise = (async () => {
+      set({ loading: true, error: null })
+      try {
+        let query = 'SELECT * FROM document_folders'
+        const params: unknown[] = []
+
+        if (caseId !== undefined) {
+          query += ' WHERE case_id = ? OR case_id IS NULL'
+          params.push(caseId)
+        }
+
+        query += ' ORDER BY position ASC, name ASC'
+
+        const folders = await executeQuery<DocumentFolder>(query, params)
+        set({ folders, loading: false })
+      } catch (error) {
+        set({ error: getErrorMessage(error), loading: false })
+      } finally {
+        if (fetchFoldersInFlight?.key === requestKey) {
+          fetchFoldersInFlight = null
+        }
+      }
+    })()
+
+    fetchFoldersInFlight = { key: requestKey, promise }
+    return promise
   },
 
   getFolderTree: () => {

@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { globalSearch } from '@/lib/globalSearch'
 import type { SearchResult } from '@/types'
 
+let latestSearchRequestId = 0
+
 interface SearchStore {
   query: string
   results: SearchResult[]
@@ -31,22 +33,29 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
 
   search: async () => {
     const { query } = get()
-    if (!query.trim()) {
+    const normalizedQuery = query.trim()
+
+    if (!normalizedQuery) {
+      latestSearchRequestId += 1
       set({ results: [], loading: false })
       return
     }
 
+    const requestId = ++latestSearchRequestId
     set({ loading: true })
     try {
-      const results = await globalSearch(query)
+      const results = await globalSearch(normalizedQuery)
+      if (requestId !== latestSearchRequestId) return
       set({ results, loading: false, selectedIndex: results.length > 0 ? 0 : -1 })
     } catch (error) {
+      if (requestId !== latestSearchRequestId) return
       console.error('Search error:', error)
       set({ results: [], loading: false })
     }
   },
 
   clear: () => {
+    latestSearchRequestId += 1
     set({ query: '', results: [], isOpen: false, selectedIndex: -1 })
   },
 

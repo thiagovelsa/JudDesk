@@ -6,6 +6,7 @@ import {
   checkAndNotifyOverdueDeadlines,
   resetNotificationTracking,
 } from './notifications'
+import { toLocalDateKey } from './utils'
 import type { Deadline } from '@/types'
 
 // Mock the Tauri notification plugin
@@ -115,7 +116,7 @@ describe('notifications', () => {
   describe('checkAndNotifyUpcomingDeadlines', () => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const todayStr = today.toISOString().split('T')[0]
+    const todayStr = toLocalDateKey(today)
 
     const createDeadline = (overrides: Partial<Deadline> = {}): Deadline => ({
       id: 1,
@@ -192,7 +193,7 @@ describe('notifications', () => {
 
       const tomorrow = new Date(today)
       tomorrow.setDate(tomorrow.getDate() + 1)
-      const tomorrowStr = tomorrow.toISOString().split('T')[0]
+      const tomorrowStr = toLocalDateKey(tomorrow)
 
       const deadline = createDeadline({
         due_date: `${tomorrowStr}T12:00:00.000Z`,
@@ -211,7 +212,7 @@ describe('notifications', () => {
 
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = yesterday.toISOString().split('T')[0]
+    const yesterdayStr = toLocalDateKey(yesterday)
 
     const createDeadline = (overrides: Partial<Deadline> = {}): Deadline => ({
       id: 1,
@@ -269,7 +270,7 @@ describe('notifications', () => {
 
       const tomorrow = new Date(today)
       tomorrow.setDate(tomorrow.getDate() + 1)
-      const tomorrowStr = tomorrow.toISOString().split('T')[0]
+      const tomorrowStr = toLocalDateKey(tomorrow)
 
       const deadline = createDeadline({
         due_date: `${tomorrowStr}T12:00:00.000Z`,

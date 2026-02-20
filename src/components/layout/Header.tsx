@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import SearchBar from './SearchBar'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useDeadlineStore } from '@/stores/deadlineStore'
-import { cn } from '@/lib/utils'
+import { cn, toLocalDateKey } from '@/lib/utils'
 
 interface HeaderProps {
   onMenuClick?: () => void
@@ -57,7 +57,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const todayStr = today.toISOString().split('T')[0]
+    const todayStr = toLocalDateKey(today)
     const pendingIds = new Set<number>()
 
     for (const deadline of deadlines) {

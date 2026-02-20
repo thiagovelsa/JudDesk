@@ -92,6 +92,7 @@ const MAX_FILE_COUNT = 5
 // Virtualization threshold for session list
 const SESSION_VIRTUALIZATION_THRESHOLD = 50
 const SESSION_ITEM_HEIGHT = 60
+const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
 
 const getFallbackModelForProvider = (
   nextProvider: AIProvider,
@@ -179,6 +180,7 @@ export default function Assistant() {
   const claudeApiKey = useSettingsStore((state) => state.settings['claude_api_key'])
   const openaiApiKey = useSettingsStore((state) => state.settings['openai_api_key'])
   const geminiApiKey = useSettingsStore((state) => state.settings['gemini_api_key'])
+  const ollamaUrlSetting = useSettingsStore((state) => state.settings['ollama_url'])
   const claudeThinkingEnabled = useSettingsStore((state) => state.settings['claude_thinking_enabled'])
   const claudeWebSearchEnabled = useSettingsStore((state) => state.settings['claude_web_search_enabled'])
   const claudeCacheEnabled = useSettingsStore((state) => state.settings['claude_cache_enabled'])
@@ -193,6 +195,8 @@ export default function Assistant() {
   const { getExtractedText, extractDocumentText } = useDocumentStore()
   const { documents, fetchDocuments } = useDocumentStore()
   const { cases, fetchCases } = useCaseStore()
+  const effectiveOllamaUrl =
+    (ollamaUrlSetting || DEFAULT_OLLAMA_URL).trim().replace(/\/+$/, '') || DEFAULT_OLLAMA_URL
 
   // Keyboard event handler for accessibility (ESC to close menus)
   useEffect(() => {
@@ -232,11 +236,11 @@ export default function Assistant() {
     const checkOllama = async () => {
       setOllamaStatus('checking')
       try {
-        const running = await isOllamaRunning()
+        const running = await isOllamaRunning(effectiveOllamaUrl)
         setOllamaStatus(running ? 'online' : 'offline')
 
         if (running) {
-          const models = await getOllamaModels()
+          const models = await getOllamaModels(effectiveOllamaUrl)
           if (!isMountedRef.current) return
           setOllamaModels(models)
         }
@@ -248,7 +252,7 @@ export default function Assistant() {
     }
 
     checkOllama()
-  }, [])
+  }, [effectiveOllamaUrl])
 
   // Initialize assistant context with persisted/default settings
   useEffect(() => {
@@ -888,7 +892,8 @@ export default function Assistant() {
           messagesForAI,
           apiKey || undefined,
           undefined,
-          abortControllerRef.current.signal
+          abortControllerRef.current.signal,
+          effectiveOllamaUrl
         )
 
         const assistantMsg: LocalMessage = {
@@ -946,6 +951,7 @@ export default function Assistant() {
     await send(userMessage, {
       apiKey: apiKey || undefined,
       context: allContexts || undefined,
+      ollamaUrl: effectiveOllamaUrl,
       claudeSettings,
       openaiSettings,
       geminiSettings,

@@ -2,12 +2,17 @@ import type { AIProvider, OllamaModel } from '@/types'
 import type { APIUsage, GPT5Usage, GeminiUsage } from './costTracker'
 import type { ReasoningEffort, Verbosity, GeminiThinkingLevel } from './intentClassifier'
 
-const OLLAMA_BASE_URL = 'http://localhost:11434'
+const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434'
 
 const SYSTEM_PROMPT = `Você é um assistente jurídico especializado no direito brasileiro.
 Auxilie na análise de casos, elaboração de peças processuais e pesquisa jurisprudencial.
 Seja preciso nas citações legais e mantenha linguagem técnica apropriada.
 Quando relevante, cite artigos de lei, súmulas e jurisprudência.`
+
+function normalizeOllamaBaseUrl(baseUrl?: string): string {
+  const normalized = (baseUrl || DEFAULT_OLLAMA_BASE_URL).trim().replace(/\/+$/, '')
+  return normalized || DEFAULT_OLLAMA_BASE_URL
+}
 
 // ============================================================================
 // Types for Extended Thinking and Web Search
@@ -143,9 +148,10 @@ interface ClaudeAPIResponse {
   }
 }
 
-export async function isOllamaRunning(): Promise<boolean> {
+export async function isOllamaRunning(baseUrl?: string): Promise<boolean> {
+  const ollamaBaseUrl = normalizeOllamaBaseUrl(baseUrl)
   try {
-    const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+    const response = await fetch(`${ollamaBaseUrl}/api/tags`, {
       method: 'GET',
     })
     return response.ok
@@ -154,9 +160,10 @@ export async function isOllamaRunning(): Promise<boolean> {
   }
 }
 
-export async function getOllamaModels(): Promise<OllamaModel[]> {
+export async function getOllamaModels(baseUrl?: string): Promise<OllamaModel[]> {
+  const ollamaBaseUrl = normalizeOllamaBaseUrl(baseUrl)
   try {
-    const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`)
+    const response = await fetch(`${ollamaBaseUrl}/api/tags`)
     if (!response.ok) return []
     const data = await response.json()
     return data.models || []
@@ -174,8 +181,10 @@ export async function sendToOllama(
   model: string,
   messages: { role: string; content: string }[],
   context?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  baseUrl?: string
 ): Promise<string> {
+  const ollamaBaseUrl = normalizeOllamaBaseUrl(baseUrl)
   const systemPrompt = context
     ? `${SYSTEM_PROMPT}\n\nContexto dos documentos:\n${context}`
     : SYSTEM_PROMPT
@@ -185,7 +194,7 @@ export async function sendToOllama(
     ...messages,
   ]
 
-  const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+  const response = await fetch(`${ollamaBaseUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -650,9 +659,21 @@ export async function sendMessage(
   messages: { role: string; content: string }[],
   apiKey?: string,
   context?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  ollamaBaseUrl?: string
 ): Promise<string> {
-  const response = await sendMessageAdvanced(provider, model, messages, apiKey, context, undefined, undefined, undefined, signal)
+  const response = await sendMessageAdvanced(
+    provider,
+    model,
+    messages,
+    apiKey,
+    context,
+    undefined,
+    undefined,
+    undefined,
+    signal,
+    ollamaBaseUrl
+  )
   return response.content
 }
 
@@ -679,11 +700,12 @@ export async function sendMessageAdvanced(
   claudeConfig?: ClaudeRequestConfig,
   gpt5Config?: GPT5RequestConfig,
   geminiConfig?: GeminiRequestConfig,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  ollamaBaseUrl?: string
 ): Promise<AIResponse> {
   switch (provider) {
     case 'ollama': {
-      const content = await sendToOllama(model, messages, context, signal)
+      const content = await sendToOllama(model, messages, context, signal, ollamaBaseUrl)
       return { content }
     }
     case 'claude': {
@@ -764,12 +786,13 @@ export interface APITestResult {
  */
 export async function testAPIConnection(
   provider: AIProvider,
-  apiKey: string
+  apiKey: string,
+  ollamaBaseUrl?: string
 ): Promise<APITestResult> {
   try {
     switch (provider) {
       case 'ollama': {
-        const running = await isOllamaRunning()
+        const running = await isOllamaRunning(ollamaBaseUrl)
         return {
           success: running,
           error: running ? undefined : 'Ollama não está rodando',

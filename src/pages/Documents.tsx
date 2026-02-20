@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   Upload,
   Search,
@@ -153,6 +154,7 @@ const DocumentCard = memo(function DocumentCard({
 })
 
 export default function Documents() {
+  const location = useLocation()
   const [search, setSearch] = useState('')
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
@@ -186,10 +188,22 @@ export default function Documents() {
   const { folders, fetchFolders } = useFolderStore()
 
   useEffect(() => {
-    fetchDocuments()
-    fetchClients()
-    fetchFolders()
-  }, [fetchDocuments, fetchClients, fetchFolders])
+    if (documents.length === 0) {
+      fetchDocuments().catch((error) => {
+        console.error('Failed to load documents:', error)
+      })
+    }
+    if (clients.length === 0) {
+      fetchClients().catch((error) => {
+        console.error('Failed to load clients:', error)
+      })
+    }
+    if (folders.length === 0) {
+      fetchFolders().catch((error) => {
+        console.error('Failed to load folders:', error)
+      })
+    }
+  }, [documents.length, clients.length, folders.length, fetchDocuments, fetchClients, fetchFolders])
 
   // Use refs to avoid triggering useEffect on function identity changes
   const searchDocumentsRef = useRef(searchDocuments)
@@ -208,6 +222,23 @@ export default function Documents() {
 
     return () => clearTimeout(delaySearch)
   }, [search])
+
+  useEffect(() => {
+    if (!location.search || documents.length === 0) return
+
+    const params = new URLSearchParams(location.search)
+    const documentIdParam = params.get('id')
+    if (!documentIdParam) return
+
+    const documentId = Number(documentIdParam)
+    if (!Number.isFinite(documentId)) return
+
+    const targetDocument = documents.find((doc) => doc.id === documentId)
+    if (!targetDocument) return
+
+    setSelectedDocument(targetDocument)
+    setSelectedFolderId(targetDocument.folder_id ?? null)
+  }, [location.search, documents])
 
   const filteredDocuments = useMemo(
     () => selectedFolderId !== null

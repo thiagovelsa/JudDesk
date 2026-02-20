@@ -47,7 +47,7 @@ import {
   type DatabaseHealth,
 } from '@/lib/db'
 import { checkNotificationPermission } from '@/lib/notifications'
-import { testAPIConnection } from '@/lib/ai'
+import { testAPIConnection, isOllamaRunning } from '@/lib/ai'
 
 interface SettingsSection {
   id: string
@@ -611,12 +611,8 @@ export default function Settings() {
   const checkOllamaConnection = async () => {
     setOllamaStatus('checking')
     try {
-      const response = await fetch(`${ollamaUrl}/api/tags`)
-      if (response.ok) {
-        setOllamaStatus('connected')
-      } else {
-        setOllamaStatus('disconnected')
-      }
+      const connected = await isOllamaRunning(ollamaUrl)
+      setOllamaStatus(connected ? 'connected' : 'disconnected')
     } catch {
       setOllamaStatus('disconnected')
     }

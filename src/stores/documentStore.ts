@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { executeQuery, executeInsert, executeUpdate, executeDelete, getDocumentsMetadata, getDocumentExtractedText, updateDocumentFTS, searchDocumentsFast } from '@/lib/db'
+import { executeQuery, executeInsert, executeUpdate, executeDelete, getDocumentsMetadata, getDocumentExtractedText, updateDocumentFTS, removeDocumentFTS, searchDocumentsFast } from '@/lib/db'
 import { isSupportedFileType } from '@/lib/extractors'
 import { extractTextFromPDFFile, createTextSummary } from '@/lib/pdf'
 import { logActivity } from '@/lib/activityLogger'
@@ -11,6 +11,7 @@ import type { Document } from '@/types'
 
 /** Maximum number of extracted texts to keep in cache */
 const EXTRACTED_TEXT_CACHE_SIZE = 10
+let fetchDocumentsInFlight: { key: string; promise: Promise<void> } | null = null
 
 interface DocumentInput {
   client_id: number
@@ -51,29 +52,43 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   extractedTextCache: new Map<number, string>(),
 
   fetchDocuments: async (clientId?: number) => {
-    set({ loading: true, error: null })
-    try {
-      // Use optimized query that excludes extracted_text
-      const metadata = await getDocumentsMetadata(clientId)
-
-      // Convert metadata to Document type (without extracted_text loaded)
-      const documents: Document[] = metadata.map(m => ({
-        id: m.id,
-        case_id: m.case_id,
-        client_id: m.client_id,
-        name: m.name,
-        file_path: m.file_path,
-        folder_id: m.folder_id,
-        created_at: m.created_at,
-        updated_at: m.updated_at,
-        // Mark if text exists but don't load it
-        extracted_text: m.has_extracted_text ? '__LAZY_LOAD__' : null,
-      }))
-
-      set({ documents, loading: false })
-    } catch (error) {
-      set({ error: getErrorMessage(error), loading: false })
+    const requestKey = clientId === undefined ? 'all' : `client:${clientId}`
+    if (fetchDocumentsInFlight?.key === requestKey) {
+      return fetchDocumentsInFlight.promise
     }
+
+    const promise = (async () => {
+      set({ loading: true, error: null })
+      try {
+        // Use optimized query that excludes extracted_text
+        const metadata = await getDocumentsMetadata(clientId)
+
+        // Convert metadata to Document type (without extracted_text loaded)
+        const documents: Document[] = metadata.map(m => ({
+          id: m.id,
+          case_id: m.case_id,
+          client_id: m.client_id,
+          name: m.name,
+          file_path: m.file_path,
+          folder_id: m.folder_id,
+          created_at: m.created_at,
+          updated_at: m.updated_at,
+          // Mark if text exists but don't load it
+          extracted_text: m.has_extracted_text ? '__LAZY_LOAD__' : null,
+        }))
+
+        set({ documents, loading: false })
+      } catch (error) {
+        set({ error: getErrorMessage(error), loading: false })
+      } finally {
+        if (fetchDocumentsInFlight?.key === requestKey) {
+          fetchDocumentsInFlight = null
+        }
+      }
+    })()
+
+    fetchDocumentsInFlight = { key: requestKey, promise }
+    return promise
   },
 
   getDocument: async (id: number) => {
@@ -223,6 +238,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       const docName = doc?.name
 
       await executeDelete('DELETE FROM documents WHERE id = ?', [id])
+      await removeDocumentFTS(id)
       set((state) => ({
         documents: state.documents.filter((d) => d.id !== id),
         extractedTextCache: new Map(
@@ -267,7 +283,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
 
       // Save extracted text to database
       await executeUpdate(
-        'UPDATE documents SET extracted_text = ? WHERE id = ?',
+        'UPDATE documents SET extracted_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [result.text, documentId]
       )
 
@@ -281,6 +297,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
         documents: state.documents.map((d) =>
           d.id === documentId ? { ...d, extracted_text: result.text } : d
         ),
+        extractedTextCache: new Map(state.extractedTextCache).set(documentId, result.text),
         extractionProgress: null,
       }))
 

@@ -6,6 +6,7 @@
  */
 
 import { executeQuery, executeInsert, isTauriEnvironment } from './db'
+import { toLocalDateKey } from './utils'
 import type { ActivityLog, EntityType, ActionType } from '@/types'
 
 interface ActivityFilters {
@@ -127,7 +128,7 @@ export async function getRecentActivities(days: number = 30): Promise<ActivityLo
       `SELECT * FROM activity_logs
        WHERE date(created_at) >= date(?)
        ORDER BY created_at DESC`,
-      [startDate.toISOString().split('T')[0]]
+      [toLocalDateKey(startDate)]
     )
   } catch (error) {
     console.error('Failed to get recent activities:', error)

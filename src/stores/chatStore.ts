@@ -12,6 +12,7 @@ const MESSAGES_PAGE_SIZE = 50
 const AI_CONTEXT_LIMIT = 30
 /** Maximum messages kept in memory for UI rendering */
 const UI_WINDOW_SIZE = 100
+let fetchSessionsInFlight: Promise<void> | null = null
 
 function capMessageWindow<T>(items: T[]): T[] {
   if (items.length <= UI_WINDOW_SIZE) return items
@@ -64,6 +65,7 @@ interface MessagesPagination {
 export interface SendOptions {
   apiKey?: string
   context?: string
+  ollamaUrl?: string
   /** Override auto-detected intent config */
   intentOverride?: Partial<IntentConfig>
   /** Override auto-detected GPT-5 intent config */
@@ -138,15 +140,25 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   lastCost: null,
 
   fetchSessions: async () => {
-    set({ loadingSessions: true, error: null })
-    try {
-      const sessions = await executeQuery<ChatSession>(
-        'SELECT * FROM chat_sessions ORDER BY created_at DESC'
-      )
-      set({ sessions, loadingSessions: false })
-    } catch (error) {
-      set({ error: getErrorMessage(error), loadingSessions: false })
+    if (fetchSessionsInFlight) {
+      return fetchSessionsInFlight
     }
+
+    fetchSessionsInFlight = (async () => {
+      set({ loadingSessions: true, error: null })
+      try {
+        const sessions = await executeQuery<ChatSession>(
+          'SELECT * FROM chat_sessions ORDER BY created_at DESC'
+        )
+        set({ sessions, loadingSessions: false })
+      } catch (error) {
+        set({ error: getErrorMessage(error), loadingSessions: false })
+      } finally {
+        fetchSessionsInFlight = null
+      }
+    })()
+
+    return fetchSessionsInFlight
   },
 
   createSession: async (provider: AIProvider, model: string, caseId?: number) => {
@@ -482,7 +494,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         options?.context,
         claudeConfig,
         gpt5Config,
-        geminiConfig
+        geminiConfig,
+        undefined,
+        options?.ollamaUrl
       )
 
       // Calculate cost based on provider

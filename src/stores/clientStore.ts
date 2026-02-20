@@ -9,6 +9,8 @@ import { useCaseStore } from './caseStore'
 import { cleanupAfterClientDelete } from './cascadeCleanup'
 import type { Client } from '@/types'
 
+let fetchClientsInFlight: Promise<void> | null = null
+
 interface ClientInput {
   name: string
   cpf_cnpj?: string
@@ -46,15 +48,25 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   error: null,
 
   fetchClients: async () => {
-    set({ loading: true, error: null })
-    try {
-      const clients = await executeQuery<Client>(
-        'SELECT * FROM clients ORDER BY created_at DESC'
-      )
-      set({ clients, loading: false })
-    } catch (error) {
-      set({ error: getErrorMessage(error), loading: false })
+    if (fetchClientsInFlight) {
+      return fetchClientsInFlight
     }
+
+    fetchClientsInFlight = (async () => {
+      set({ loading: true, error: null })
+      try {
+        const clients = await executeQuery<Client>(
+          'SELECT * FROM clients ORDER BY created_at DESC'
+        )
+        set({ clients, loading: false })
+      } catch (error) {
+        set({ error: getErrorMessage(error), loading: false })
+      } finally {
+        fetchClientsInFlight = null
+      }
+    })()
+
+    return fetchClientsInFlight
   },
 
   getClient: async (id: number) => {
